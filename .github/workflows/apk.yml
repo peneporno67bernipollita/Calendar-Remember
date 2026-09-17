@@ -72,16 +72,18 @@ jobs:
           path: salida/Nebula.apk
 
       # Publica el APK en una release fija que siempre apunta a lo ultimo.
+      # Con gh en vez de una accion: si falla, el motivo sale en este mismo
+      # registro en lugar de quedarse dentro de los logs de Actions.
       - name: Publicar el APK
         if: steps.construir.outcome == 'success'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ultima
-          name: Ultima version
-          body: |
-            APK de Nebula compilado desde el ultimo commit de main.
-            Descarga Nebula.apk e instalalo en el movil.
-          files: salida/Nebula.apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ultima             --title "Ultima version"             --notes "APK de Nebula compilado desde el ultimo commit de main."             2>/dev/null || true
+          # El APK se llamaba antes CalendarRemember.apk: se retira para que
+          # en la release no queden dos ficheros distintos.
+          gh release delete-asset ultima CalendarRemember.apk -y 2>/dev/null || true
+          gh release upload ultima salida/Nebula.apk --clobber
 
       # El paso de compilar no corta el flujo para que el registro llegue a
       # publicarse; el resultado real del build se refleja aqui.
