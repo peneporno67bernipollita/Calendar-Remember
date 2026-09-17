@@ -6,26 +6,35 @@ import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.calendarremember.MainActivity
 import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.Evento
+import com.calendarremember.ui.DialogoCancelar
+import com.calendarremember.ui.TemaNebula
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Dictar un evento de un toque.
+ * Dictar de un toque.
  *
- * Es la actividad que abren el widget y el acceso directo, y la que arranca
- * cuando le pides a Google que abra la app: no enseña el calendario, solo
- * escucha, apunta y se quita de en medio.
+ * Es la actividad que abren el widget, el botón de los ajustes rápidos y el
+ * acceso directo: no enseña el calendario, solo escucha, hace lo que se le
+ * pide y se quita de en medio.
  *
- * Usa el reconocedor del sistema (el mismo que el teclado), así que no hace
- * falta ni conexión propia ni claves de nadie.
+ * Entiende dos cosas: apuntar algo nuevo y cancelar algo que ya existe.
+ * Apuntar se resuelve solo; cancelar siempre pregunta antes.
  */
 class VozActivity : ComponentActivity() {
 
     private val ES = Locale("es", "ES")
+
+    private var candidatos by mutableStateOf<List<Evento>>(emptyList())
 
     private val dictado = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -44,12 +53,28 @@ class VozActivity : ComponentActivity() {
             finish()
             return@registerForActivityResult
         }
-        apuntar(texto)
+        atender(texto)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Almacen.cargar(this)
+
+        setContent {
+            TemaNebula {
+                if (candidatos.isNotEmpty()) {
+                    DialogoCancelar(
+                        candidatos = candidatos,
+                        alConfirmar = { evento ->
+                            Almacen.borrar(this, evento.id)
+                            avisar("Cancelado: ${evento.titulo}")
+                            finish()
+                        },
+                        alCerrar = { finish() },
+                    )
+                }
+            }
+        }
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
@@ -67,9 +92,15 @@ class VozActivity : ComponentActivity() {
         }
     }
 
-    private fun apuntar(texto: String) {
+    private fun atender(texto: String) {
         val leido = Interprete.interpretar(texto)
+        when (leido.accion) {
+            Accion.CREAR -> apuntar(leido)
+            Accion.BORRAR -> cancelar(leido)
+        }
+    }
 
+    private fun apuntar(leido: Interpretacion) {
         val evento = Evento(
             titulo = leido.titulo,
             inicio = leido.inicio,
@@ -84,16 +115,50 @@ class VozActivity : ComponentActivity() {
         // corregirlo. Guardar algo torcido en silencio es peor que preguntar.
         if (leido.confianza == Confianza.BAJA) {
             avisar("No lo he entendido bien, revísalo")
-            startActivity(
-                Intent(this, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    putExtra("evento", evento.id)
-                }
-            )
+            abrirApp(evento.id)
         } else {
             avisar(confirmacion(evento))
         }
         finish()
+    }
+
+    /**
+     * Cancelar no borra nada por su cuenta: busca a qué se refería la frase y
+     * lo enseña. Si hay varios parecidos, los muestra todos para elegir.
+     */
+    private fun cancelar(leido: Interpretacion) {
+        if (leido.titulo.isBlank()) {
+            avisar("Dime qué cancelo")
+            finish()
+            return
+        }
+
+        val encontrados = Buscador.candidatos(
+            criterio = leido.titulo,
+            fecha = if (leido.fechaDicha) leido.inicio.toLocalDate() else null,
+            eventos = Almacen.eventos.value,
+            ahora = LocalDateTime.now(),
+        )
+
+        if (encontrados.isEmpty()) {
+            avisar("No he encontrado nada parecido a «${leido.titulo}»")
+            finish()
+            return
+        }
+
+        // Con un favorito claro se pregunta por ese; si no, se enseñan los
+        // que compiten para que elija quien sabe cuál era.
+        val unico = Buscador.unico(encontrados)
+        candidatos = if (unico != null) listOf(unico) else encontrados.take(4).map { it.evento }
+    }
+
+    private fun abrirApp(eventoId: String) {
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("evento", eventoId)
+            }
+        )
     }
 
     /** Lo que se le dice al usuario: la fecha entera, para que note un error. */

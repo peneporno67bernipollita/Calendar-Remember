@@ -14,12 +14,25 @@ import java.time.LocalDateTime
 
 enum class Confianza { ALTA, MEDIA, BAJA }
 
+/** Lo que pide la frase: apuntar algo nuevo o quitar algo que ya existe. */
+enum class Accion { CREAR, BORRAR }
+
 data class Interpretacion(
+    val accion: Accion,
+    /**
+     * Para CREAR es el título del evento. Para BORRAR es lo que hay que
+     * buscar entre los eventos ya guardados.
+     */
     val titulo: String,
     val inicio: LocalDateTime,
     val todoElDia: Boolean,
     val avisos: List<Int>,
     val duracionMin: Int?,
+    /**
+     * Si la frase decía una fecha. Al buscar un evento para cancelarlo hay
+     * que distinguir entre "el viernes" y el día de hoy puesto por defecto.
+     */
+    val fechaDicha: Boolean,
     val dictado: String,
     val confianza: Confianza,
 )
@@ -57,6 +70,9 @@ object Interprete {
      * "cita" no está en la lista: "cita con el dentista" es un buen título.
      */
     private val ARRANQUES = listOf(
+        // Al dictar se tiende a llamar a la app por su nombre antes de pedir
+        // nada: "Nébula, apúntame...". No es parte de lo que se apunta.
+        "nebula",
         "anademe", "anade", "apuntame", "apunta", "recuerdame", "recuerda",
         "agendame", "agenda", "ponme", "pon", "creame", "crea", "programame",
         "programa", "meteme", "mete", "guardame", "guarda", "tengo que", "tengo",
@@ -107,6 +123,17 @@ object Interprete {
             if (m != null) consumido.add(m.range)
             return m
         }
+
+        // Qué se pide. El verbo puede ir delante ("cancela la cena del
+        // viernes") o detrás ("lo del finde, cancélalo"), que es como sale al
+        // hablar. Al final solo cuenta si lleva pronombre pegado —"cancélalo",
+        // "bórralo"—, porque así no hay duda de que es una orden: un "para
+        // cancelar el contrato" en mitad de un título no la dispara.
+        val VERBOS = "cancela|borra|elimina|quita|anula|suprime"
+        val accion = if (
+            buscar("^\s*(?:nebula\s*[,.]?\s*)?(?:$VERBOS)(?:me|lo|la)?\b") != null ||
+            buscar("\b(?:$VERBOS)(?:me)?(?:lo|la)\b") != null
+        ) Accion.BORRAR else Accion.CREAR
 
         val hoy = ahora.toLocalDate()
         var fecha: LocalDate? = null
@@ -258,6 +285,21 @@ object Interprete {
             }
         }
 
+        // 6b. El fin de semana. Se toma el sábado como referencia; al buscar,
+        //     un día de margen hace que el domingo también valga.
+        if (fecha == null) {
+            val mFinde = buscar("\b(?:este\s+|el\s+|los\s+)?" +
+                "(?:finde|fin\s+de\s+semana)(?:\s+que\s+viene|\s+proximo)?\b")
+            if (mFinde != null) {
+                var saltos = (DayOfWeek.SATURDAY.value - hoy.dayOfWeek.value + 7) % 7
+                if (saltos == 0) saltos = 7
+                if (mFinde.value.contains("viene") || mFinde.value.contains("proximo")) {
+                    if (saltos != 7) saltos += 7
+                }
+                fecha = hoy.plusDays(saltos.toLong())
+            }
+        }
+
         // 7. Relativos sueltos. "mañana" ya no puede confundirse: si formaba
         //    parte de "de la mañana", la regla 4 se lo comió.
         if (fecha == null) {
@@ -275,6 +317,7 @@ object Interprete {
 
         // --- Resolución --------------------------------------------------
         val todoElDia = hora == null
+        val fechaDicha = fecha != null
 
         if (fecha == null) {
             fecha = if (hora != null) {
@@ -324,23 +367,27 @@ object Interprete {
             .replace(Regex("^(?:de|del|el|la|a|al|en|que|para|por|un|una)\\s+", RegexOption.IGNORE_CASE), "")
             .trim(' ', ',', ';', '.')
 
-        if (titulo.isEmpty()) titulo = "Recordatorio"
+        if (titulo.isEmpty() && accion == Accion.CREAR) titulo = "Recordatorio"
         titulo = titulo.replaceFirstChar { it.uppercase() }
 
         // La confianza existe para que la app pregunte en vez de dar por bueno
         // algo que no ha entendido.
         val confianza = when {
-            titulo == "Recordatorio" -> Confianza.BAJA
+            titulo.isEmpty() || titulo == "Recordatorio" -> Confianza.BAJA
+            // Al cancelar no hace falta hora: basta con saber qué se quita.
+            accion == Accion.BORRAR -> Confianza.ALTA
             todoElDia -> Confianza.MEDIA
             else -> Confianza.ALTA
         }
 
         return Interpretacion(
+            accion = accion,
             titulo = titulo,
             inicio = inicio,
             todoElDia = todoElDia,
             avisos = avisos ?: if (todoElDia) listOf(1440, 0) else listOf(1440, 60, 0),
             duracionMin = duracionMin,
+            fechaDicha = fechaDicha,
             dictado = original,
             confianza = confianza,
         )
