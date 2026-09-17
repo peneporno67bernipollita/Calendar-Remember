@@ -92,8 +92,18 @@ object Interprete {
 
         // Tramos de la frase ya consumidos por una regla. Se borran del título.
         val consumido = mutableListOf<IntRange>()
+
+        fun pisaLoYaLeido(rango: IntRange) =
+            consumido.any { rango.first <= it.last && it.first <= rango.last }
+
+        /**
+         * Busca saltándose lo que otra regla ya se llevó. Sin esto, "a las
+         * nueve de la mañana" acabaría en el día siguiente: la regla de la
+         * hora consume "de la mañana" entera, pero la regla de los relativos
+         * volvería a encontrar ese "mañana" suelto y lo leería como un día.
+         */
         fun buscar(patron: String): MatchResult? {
-            val m = Regex(patron).find(texto)
+            val m = Regex(patron).findAll(texto).firstOrNull { !pisaLoYaLeido(it.range) }
             if (m != null) consumido.add(m.range)
             return m
         }
@@ -163,10 +173,12 @@ object Interprete {
                 // alarma a las siete" lo hace el "una".
                 val m = patron.findAll(texto).firstOrNull { c ->
                     val g = c.groupValues
-                    Regex("a\\s+las?\\s+|a\\s+la\\s+").containsMatchIn(c.value) ||
-                        g[2].isNotEmpty() || g[3].isNotEmpty() ||
-                        g[4].isNotEmpty() || g[5].isNotEmpty() ||
-                        Regex("\\dh\\b").containsMatchIn(c.value)
+                    !pisaLoYaLeido(c.range) && (
+                        Regex("a\\s+las?\\s+|a\\s+la\\s+").containsMatchIn(c.value) ||
+                            g[2].isNotEmpty() || g[3].isNotEmpty() ||
+                            g[4].isNotEmpty() || g[5].isNotEmpty() ||
+                            Regex("\\dh\\b").containsMatchIn(c.value)
+                        )
                 }
                 if (m != null) {
                     consumido.add(m.range)
@@ -277,12 +289,24 @@ object Interprete {
         // --- Título --------------------------------------------------------
         // Se recorta del texto ORIGINAL (con tildes) usando los tramos que las
         // reglas fueron marcando, de atrás hacia delante para no mover índices.
-        var titulo = original
-        for (rango in consumido.sortedByDescending { it.first }) {
-            if (rango.first <= titulo.length && rango.last < titulo.length) {
-                titulo = titulo.substring(0, rango.first) + " " +
-                        titulo.substring(rango.last + 1)
+        // Los tramos se unen antes de recortar: dos que se toquen tienen que
+        // salir de una sola pasada, porque al quitar el primero los índices
+        // del segundo ya no valdrían.
+        val tramos = mutableListOf<IntRange>()
+        for (rango in consumido.sortedBy { it.first }) {
+            val ultimo = tramos.lastOrNull()
+            if (ultimo != null && rango.first <= ultimo.last + 1) {
+                tramos[tramos.size - 1] = ultimo.first..maxOf(ultimo.last, rango.last)
+            } else {
+                tramos.add(rango)
             }
+        }
+
+        var titulo = original
+        for (rango in tramos.sortedByDescending { it.first }) {
+            val desde = rango.first.coerceIn(0, titulo.length)
+            val hasta = (rango.last + 1).coerceIn(desde, titulo.length)
+            titulo = titulo.substring(0, desde) + " " + titulo.substring(hasta)
         }
         titulo = titulo.replace(Regex("\\s+"), " ").trim()
 

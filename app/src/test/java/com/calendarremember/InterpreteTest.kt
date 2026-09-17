@@ -76,6 +76,23 @@ class InterpreteTest {
         comprobar("pon una alarma a las siete menos cuarto de la mañana",
             "Alarma", "18/09 06:45")
 
+    /**
+     * "de la mañana" es el tramo del día, no el día siguiente. Dicho a las
+     * 7:00, esto es para dentro de dos horas, no para mañana.
+     */
+    @Test fun deLaMananaNoEsElDiaSiguiente() {
+        val aLasSiete = LocalDateTime.of(2026, 9, 17, 7, 0)
+        val r = Interprete.interpretar("reunión a las nueve de la mañana", aLasSiete)
+        assertEquals("Reunión", r.titulo)
+        assertEquals(LocalDateTime.of(2026, 9, 17, 9, 0), r.inicio)
+    }
+
+    /** La misma frase, cuando esa hora ya pasó, sí salta al día siguiente. */
+    @Test fun horaQueYaPasoSaltaAlDiaSiguiente() {
+        val r = Interprete.interpretar("reunión a las nueve de la mañana", ahora)
+        assertEquals(LocalDateTime.of(2026, 9, 18, 9, 0), r.inicio)
+    }
+
     @Test fun avisoExplicitoSeRespeta() {
         val r = Interprete.interpretar("médico el 3/11 a las 8 avísame dos días antes", ahora)
         assertEquals(listOf(2880, 0), r.avisos)
