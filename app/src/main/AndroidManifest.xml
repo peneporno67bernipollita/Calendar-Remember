@@ -38,6 +38,9 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/atajos" />
         </activity>
 
         <!-- Dictar de un toque. Se expone como acceso directo y como acción
@@ -51,6 +54,12 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- El gesto de asistente (mantener pulsado el boton de encendido
+                 o deslizar desde la esquina) puede apuntar aqui. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <intent-filter>
@@ -68,6 +77,18 @@
             android:launchMode="singleInstance"
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
+
+        <!-- Boton de dictado en la persiana de ajustes rapidos. -->
+        <service
+            android:name=".voz.TileVoz"
+            android:exported="true"
+            android:icon="@drawable/ic_mic"
+            android:label="@string/atajo_dictar"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".avisos.ReceptorAviso"

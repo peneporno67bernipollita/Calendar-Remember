@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Manteniendo pulsado el icono de la app sale "Dictar". Ese acceso directo
+     se puede arrastrar a la pantalla de inicio y queda como un icono suelto
+     que abre el dictado sin pasar por el calendario. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="dictar"
+        android:enabled="true"
+        android:icon="@drawable/ic_mic"
+        android:shortcutShortLabel="@string/atajo_dictar"
+        android:shortcutLongLabel="@string/atajo_dictar_largo">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.calendarremember"
+            android:targetClass="com.calendarremember.voz.VozActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>
