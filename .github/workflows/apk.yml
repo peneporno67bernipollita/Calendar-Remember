@@ -54,10 +54,15 @@ jobs:
           # Los informes de las pruebas dicen que caso concreto fallo.
           find app/build/test-results -name "*.xml" -exec cat {} \; \
             > registro/pruebas.xml 2>/dev/null || true
-          gh release delete registro -y --cleanup-tag 2>/dev/null || true
-          gh release create registro registro/salida.txt registro/pruebas.xml \
+          # Se crea una sola vez y despues se sobrescriben los ficheros.
+          # Borrarla y rehacerla en cada intento fallaba a veces, y al ir
+          # todo con "|| true" el registro desaparecia en silencio justo
+          # cuando hacia falta leerlo.
+          gh release create registro \
             --title "Registro del ultimo intento" \
-            --notes "Salida completa de la compilacion mas reciente." || true
+            --notes "Salida de la compilacion mas reciente." \
+            2>/dev/null || true
+          gh release upload registro registro/salida.txt registro/pruebas.xml --clobber
 
       - name: Renombrar el APK
         if: steps.construir.outcome == 'success'
