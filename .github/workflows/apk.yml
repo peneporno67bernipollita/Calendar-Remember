@@ -41,28 +41,25 @@ jobs:
             --no-daemon --stacktrace --console=plain 2>&1 | tee registro.txt
 
       # Ver los logs de Actions exige iniciar sesion, incluso en un repositorio
-      # publico. Publicarlos como fichero suelto los deja accesibles con una
-      # simple descarga, que es lo que permite corregir un fallo sin tener que
-      # entrar a la web a copiarlo a mano.
+      # publico. El registro se deja en una rama aparte, de donde se lee con
+      # una descarga simple: es lo que permite corregir un fallo sin entrar a
+      # la web a copiarlo a mano.
       - name: Publicar el registro
         if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p registro
-          cp registro.txt registro/salida.txt 2>/dev/null || echo "sin salida" > registro/salida.txt
+          mkdir -p /tmp/reg
+          cp registro.txt /tmp/reg/salida.txt 2>/dev/null || echo "sin salida" > /tmp/reg/salida.txt
           # Los informes de las pruebas dicen que caso concreto fallo.
-          find app/build/test-results -name "*.xml" -exec cat {} \; \
-            > registro/pruebas.xml 2>/dev/null || true
-          # Se crea una sola vez y despues se sobrescriben los ficheros.
-          # Borrarla y rehacerla en cada intento fallaba a veces, y al ir
-          # todo con "|| true" el registro desaparecia en silencio justo
-          # cuando hacia falta leerlo.
-          gh release create registro \
-            --title "Registro del ultimo intento" \
-            --notes "Salida de la compilacion mas reciente." \
-            2>/dev/null || true
-          gh release upload registro registro/salida.txt registro/pruebas.xml --clobber
+          find app/build/test-results -name '*.xml' -exec cat {} + > /tmp/reg/pruebas.xml 2>/dev/null || true
+          touch /tmp/reg/pruebas.xml
+          git config user.name "CI"
+          git config user.email "ci@nebula.local"
+          git checkout --orphan registro-ci
+          git rm -rf --cached . > /dev/null 2>&1 || true
+          cp /tmp/reg/salida.txt /tmp/reg/pruebas.xml .
+          git add -f salida.txt pruebas.xml
+          git commit -q -m "Registro de ${GITHUB_SHA:0:7}"
+          git push -f -q origin registro-ci
 
       - name: Renombrar el APK
         if: steps.construir.outcome == 'success'
@@ -77,17 +74,15 @@ jobs:
           path: salida/Nebula.apk
 
       # Publica el APK en una release fija que siempre apunta a lo ultimo.
-      # Con gh en vez de una accion: si falla, el motivo sale en este mismo
-      # registro en lugar de quedarse dentro de los logs de Actions.
       - name: Publicar el APK
         if: steps.construir.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create ultima             --title "Ultima version"             --notes "APK de Nebula compilado desde el ultimo commit de main."             2>/dev/null || true
-          # El APK se llamaba antes CalendarRemember.apk: se retira para que
-          # en la release no queden dos ficheros distintos.
-          gh release delete-asset ultima CalendarRemember.apk -y 2>/dev/null || true
+          gh release create ultima \
+            --title "Ultima version" \
+            --notes "APK de Nebula compilado desde el ultimo commit de main." \
+            2>/dev/null || true
           gh release upload ultima salida/Nebula.apk --clobber
 
       # El paso de compilar no corta el flujo para que el registro llegue a
@@ -95,5 +90,5 @@ jobs:
       - name: Resultado
         if: steps.construir.outcome != 'success'
         run: |
-          echo "La compilacion fallo. El registro esta en la release 'registro'."
+          echo "La compilacion fallo. El registro esta en la rama registro-ci."
           exit 1
