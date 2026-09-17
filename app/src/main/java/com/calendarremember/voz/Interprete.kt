@@ -273,7 +273,9 @@ object Interprete {
 
         // 6. Día de la semana: "el martes", "el viernes que viene".
         if (fecha == null) {
-            buscar("\\b(?:el\\s+|este\\s+|proximo\\s+|el\\s+proximo\\s+)?" +
+            // "del viernes" entra igual que "el viernes": al cancelar algo se
+            // dice "la cena del viernes", y el "del" es parte de la fecha.
+            buscar("\\b(?:del\\s+|el\\s+|este\\s+|proximo\\s+|el\\s+proximo\\s+)?" +
                     "(${DIAS.keys.joinToString("|")})(\\s+que\\s+viene|\\s+proximo)?\\b")?.let { m ->
                 val objetivo = DIAS[m.groupValues[1]]!!
                 var saltos = (objetivo.value - hoy.dayOfWeek.value + 7) % 7
@@ -363,8 +365,11 @@ object Interprete {
         } while (titulo != previo && titulo.isNotEmpty())
 
         // Preposiciones huérfanas que quedan al arrancar la parte temporal.
+        // También por detrás: "la cena del viernes" se queda en "la cena del"
+        // cuando la regla del día de la semana se lleva su parte.
         titulo = titulo
             .replace(Regex("^(?:de|del|el|la|a|al|en|que|para|por|un|una)\\s+", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\s+(?:de|del|el|la|los|las|a|al|en|que|para|por|con|y)$", RegexOption.IGNORE_CASE), "")
             .trim(' ', ',', ';', '.')
 
         if (titulo.isEmpty() && accion == Accion.CREAR) titulo = "Recordatorio"
