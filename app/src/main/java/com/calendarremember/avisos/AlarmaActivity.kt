@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.Evento
 import com.calendarremember.ui.Neon
-import com.calendarremember.ui.TemaCalendarRemember
+import com.calendarremember.ui.TemaNebula
 import java.time.format.DateTimeFormatter
 
 /**
@@ -62,7 +62,7 @@ class AlarmaActivity : ComponentActivity() {
         Sonido.arrancar(this)
 
         setContent {
-            TemaCalendarRemember {
+            TemaNebula {
                 PantallaAlarma(
                     evento = evento,
                     alDescartar = { cerrar(evento) },

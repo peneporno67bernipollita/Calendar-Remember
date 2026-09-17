@@ -63,13 +63,13 @@ jobs:
         if: steps.construir.outcome == 'success'
         run: |
           mkdir -p salida
-          cp app/build/outputs/apk/release/app-release.apk salida/CalendarRemember.apk
+          cp app/build/outputs/apk/release/app-release.apk salida/Nebula.apk
 
       - uses: actions/upload-artifact@v4
         if: steps.construir.outcome == 'success'
         with:
-          name: CalendarRemember-APK
-          path: salida/CalendarRemember.apk
+          name: Nebula-APK
+          path: salida/Nebula.apk
 
       # Publica el APK en una release fija que siempre apunta a lo ultimo.
       - name: Publicar el APK
@@ -79,9 +79,9 @@ jobs:
           tag_name: ultima
           name: Ultima version
           body: |
-            APK de Calendar Remember compilado desde el ultimo commit de main.
-            Descarga CalendarRemember.apk e instalalo en el movil.
-          files: salida/CalendarRemember.apk
+            APK de Nebula compilado desde el ultimo commit de main.
+            Descarga Nebula.apk e instalalo en el movil.
+          files: salida/Nebula.apk
 
       # El paso de compilar no corta el flujo para que el registro llegue a
       # publicarse; el resultado real del build se refleja aqui.

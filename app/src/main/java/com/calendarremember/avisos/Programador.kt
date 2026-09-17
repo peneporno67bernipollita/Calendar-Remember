@@ -12,8 +12,8 @@ import java.time.ZoneId
 /**
  * Programa en el sistema los avisos de cada evento.
  *
- * Las alarmas las lanza Android, no la app: no hace falta que Calendar
- * Remember esté abierta ni viva, y el aviso llega con el móvil suspendido.
+ * Las alarmas las lanza Android, no la app: no hace falta que Nébula
+ * esté abierta ni viva, y el aviso llega con el móvil suspendido.
  * Ese es justamente el motivo de que esto sea una app y no una página web.
  */
 object Programador {

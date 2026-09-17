@@ -168,7 +168,7 @@ private fun Barra(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "REMEMBER",
+            text = "NÉBULA",
             color = Neon.Cian,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,

@@ -55,7 +55,7 @@ private val esquema = darkColorScheme(
 )
 
 @Composable
-fun TemaCalendarRemember(
+fun TemaNebula(
     @Suppress("UNUSED_PARAMETER") oscuro: Boolean = isSystemInDarkTheme(),
     contenido: @Composable () -> Unit,
 ) {

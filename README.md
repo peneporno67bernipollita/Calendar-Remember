@@ -1,4 +1,4 @@
-# Calendar Remember
+# Nébula
 
 Calendario y recordatorios por voz para Android. Negro con luces de neón,
 todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
@@ -19,7 +19,7 @@ todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
 ## Instalar
 
 1. Entra en la pestaña **Releases** de este repositorio.
-2. Descarga `CalendarRemember.apk` desde el móvil.
+2. Descarga `Nebula.apk` desde el móvil.
 3. Ábrelo. Android pedirá permiso para instalar apps de esta procedencia:
    concédelo y acepta.
 4. Al abrirla por primera vez, dale permiso de notificaciones y entra en

@@ -24,7 +24,7 @@ import com.calendarremember.datos.Evento
 import com.calendarremember.ui.DialogoAjustes
 import com.calendarremember.ui.DialogoEvento
 import com.calendarremember.ui.PantallaPrincipal
-import com.calendarremember.ui.TemaCalendarRemember
+import com.calendarremember.ui.TemaNebula
 import com.calendarremember.voz.VozActivity
 import java.time.LocalDate
 
@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
         Notificaciones.refrescarAgendaDelDia(this)
 
         setContent {
-            TemaCalendarRemember {
+            TemaNebula {
                 val eventos by Almacen.eventos.collectAsState()
 
                 // El diálogo de edición se controla con dos variables: qué
@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
     private fun exportarCopia() {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/json"
-            putExtra(Intent.EXTRA_SUBJECT, "Copia de Calendar Remember")
+            putExtra(Intent.EXTRA_SUBJECT, "Copia de Nébula")
             putExtra(Intent.EXTRA_TEXT, Almacen.exportar())
         }
         startActivity(Intent.createChooser(intent, "Guardar copia"))
