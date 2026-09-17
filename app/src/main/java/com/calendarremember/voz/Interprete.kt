@@ -131,8 +131,8 @@ object Interprete {
         // cancelar el contrato" en mitad de un título no la dispara.
         val VERBOS = "cancela|borra|elimina|quita|anula|suprime"
         val accion = if (
-            buscar("^\s*(?:nebula\s*[,.]?\s*)?(?:$VERBOS)(?:me|lo|la)?\b") != null ||
-            buscar("\b(?:$VERBOS)(?:me)?(?:lo|la)\b") != null
+            buscar("""^\s*(?:nebula\s*[,.]?\s*)?(?:$VERBOS)(?:me|lo|la)?\b""") != null ||
+            buscar("""\b(?:$VERBOS)(?:me)?(?:lo|la)\b""") != null
         ) Accion.BORRAR else Accion.CREAR
 
         val hoy = ahora.toLocalDate()
@@ -288,8 +288,8 @@ object Interprete {
         // 6b. El fin de semana. Se toma el sábado como referencia; al buscar,
         //     un día de margen hace que el domingo también valga.
         if (fecha == null) {
-            val mFinde = buscar("\b(?:este\s+|el\s+|los\s+)?" +
-                "(?:finde|fin\s+de\s+semana)(?:\s+que\s+viene|\s+proximo)?\b")
+            val mFinde = buscar("""\b(?:este\s+|el\s+|los\s+)?""" +
+                """(?:finde|fin\s+de\s+semana)(?:\s+que\s+viene|\s+proximo)?\b""")
             if (mFinde != null) {
                 var saltos = (DayOfWeek.SATURDAY.value - hoy.dayOfWeek.value + 7) % 7
                 if (saltos == 0) saltos = 7
