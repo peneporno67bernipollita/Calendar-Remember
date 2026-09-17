@@ -12,8 +12,9 @@ todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
   dos días, un día, una hora, a la hora en punto.
 - **Widget en la pantalla de inicio** — los tres próximos eventos y un botón
   de micrófono que dicta de un toque.
-- **Agenda del día fija en la pantalla de bloqueo** — lo que tienes hoy, sin
-  desbloquear.
+- **Agenda del día en la pantalla de bloqueo** — lo que te queda por hacer hoy,
+  sin desbloquear. Va sola: quita cada evento en cuanto pasa su hora y
+  desaparece cuando no queda nada.
 
 ## Instalar
 
@@ -30,12 +31,17 @@ un APK nuevo automáticamente.
 
 ## Dictar un evento
 
-Tres caminos, del más rápido al más cómodo:
+Cuatro caminos, ninguno de los cuales deja nada escuchando en segundo plano:
 
-- **Widget**: el botón del micrófono, un toque.
+- **Ajustes rápidos**: baja la persiana y toca «Dictar». Se llega desde la
+  pantalla de bloqueo.
+- **Icono suelto**: mantén pulsado el icono de la app, arrastra «Dictar» a la
+  pantalla de inicio y queda como un acceso directo propio.
+- **Gesto del sistema**: la app responde al gesto de asistente, así que se
+  puede abrir manteniendo pulsado el botón de encendido si se configura como
+  asistente. En MIUI, *Configuración adicional → Atajos de gestos* permite
+  además asignarla a un gesto cualquiera.
 - **Dentro de la app**: el botón grande de abajo.
-- **Con la voz**: «Hey Google, abre Dictar un evento». Funciona con la
-  pantalla bloqueada; Google pedirá desbloquear antes de escuchar.
 
 La app repite en voz baja lo que ha entendido —día y hora completos— para que
 un error se note en el momento. Si no entiende de qué va el evento, abre la
@@ -91,12 +97,17 @@ gradle :app:assembleRelease
 Las pruebas del intérprete de voz corren antes de cada compilación, así que
 si una regla de interpretación se rompe, el APK no llega a generarse.
 
-## Lo que todavía no hace
+## Lo que no hace, y por qué
 
-- **Palabra clave propia con la pantalla apagada** («oye calendario»). Android
-  no deja que una app escuche en segundo plano sin un motor de detección
-  aparte. Se puede añadir sobre esta misma base.
-- **Widget en la pantalla de bloqueo.** En móviles Android no existen: solo
-  hay widgets en la pantalla de inicio. Lo más parecido, y ya está puesto, es
-  la notificación fija con la agenda del día.
+- **Palabra clave con la pantalla apagada** («oye Nébula»). Descartado a
+  propósito. Exige un servicio con el micrófono abierto a todas horas, una
+  notificación permanente que Android obliga a mostrar y un consumo continuo
+  de batería; encima, las capas que matan procesos en segundo plano lo cortan
+  cada dos por tres. Los cuatro atajos de arriba llegan a lo mismo con un
+  gesto y sin coste. Si algún día compensa, se añade sobre esta base.
+- **Widget en la pantalla de bloqueo.** No depende de la app: Android retiró
+  los widgets de terceros del bloqueo y solo los ha devuelto a partir de la
+  versión 14, en tablets. El widget ya se declara apto para esa ubicación, así
+  que aparecerá en los dispositivos que lleguen a admitirlo. Mientras tanto,
+  la agenda del día en la pantalla de bloqueo cumple esa función.
 - Eventos que se repiten.
