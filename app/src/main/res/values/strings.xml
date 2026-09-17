@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Calendar Remember</string>
+    <string name="widget_titulo">PRÓXIMOS</string>
+    <string name="widget_vacio">No hay nada a la vista</string>
+    <string name="widget_dictar">Dictar un evento</string>
+    <string name="atajo_dictar">Dictar</string>
+    <string name="atajo_dictar_largo">Dictar un evento</string>
+</resources>

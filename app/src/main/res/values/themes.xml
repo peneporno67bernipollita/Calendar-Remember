@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- La app pinta su propio fondo con Compose; el tema solo evita el
+         destello blanco del arranque. -->
+    <style name="Tema.CalendarRemember" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#05060A</item>
+        <item name="android:statusBarColor">#05060A</item>
+        <item name="android:navigationBarColor">#05060A</item>
+    </style>
+</resources>
