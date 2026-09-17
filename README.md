@@ -3,6 +3,8 @@
 Calendario y recordatorios por voz para Android. Negro con luces de neón,
 todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
 
+- **Cancelar dictando** — «cancela la cena del viernes» busca a qué te
+  refieres y te lo enseña antes de borrar nada.
 - **Dictado en español** — «cita con el dentista el martes a las cinco y
   media» se convierte en un evento el martes a las 17:30. Lo entiende la
   propia app, sin enviar nada a ningún sitio.
@@ -60,10 +62,22 @@ ficha para que la corrijas en vez de guardar algo torcido.
 | el día 1 | el día 1 del mes que viene |
 | ...avísame dos días antes | cambia la antelación del aviso |
 | ...durante dos horas | fija la duración |
+| el finde | el sábado que viene |
+| cancela la cena del viernes | busca esa cena y pregunta si la borra |
+| lo del finde, cancélalo | busca por fecha cuando no recuerdas el nombre |
 
 Las horas sin más ("a las cinco") se entienden como la tarde entre la una y
 las siete, y como la mañana de las ocho en adelante, que es como se habla.
 Para forzarlo: "de la mañana", "de la tarde".
+
+## Cancelar un evento
+
+Vale decirlo por delante («cancela la cena del viernes») o por detrás
+(«lo del finde, cancélalo»), que es como sale al hablar. Busca entre lo que
+tienes por el texto y por la fecha, y **siempre enseña qué va a borrar antes
+de hacerlo**: equivocarse al crear un evento se arregla borrándolo, pero
+equivocarse al borrar pierde algo que no vuelve. Si hay varios parecidos, los
+muestra para que elijas; si ninguno encaja, lo dice y no toca nada.
 
 ## Estructura
 
@@ -72,8 +86,10 @@ app/src/main/java/com/calendarremember/
   MainActivity.kt          Pantalla principal y permisos
   datos/     Evento.kt      Un evento y su paso a JSON
              Almacen.kt     Todos los eventos en un fichero, y su guardado
-  voz/       Interprete.kt  Convierte la frase dictada en un evento
+  voz/       Interprete.kt  Convierte la frase dictada en un evento o una orden
+             Buscador.kt    Encuentra de qué evento habla una cancelación
              VozActivity.kt Dictar de un toque, sin abrir el calendario
+             TileVoz.kt     El botón de dictado de los ajustes rápidos
   avisos/    Programador.kt Pone las alarmas en el sistema
              ReceptorAviso.kt  Lo que corre cuando salta una
              AlarmaActivity.kt La pantalla de la alarma
