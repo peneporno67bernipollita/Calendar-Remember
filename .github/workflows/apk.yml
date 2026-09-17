@@ -20,34 +20,60 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Se usa Gradle del runner en lugar del wrapper: asi el repositorio no
-      # necesita llevar dentro el gradle-wrapper.jar binario.
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platforms;android-35 build-tools;35.0.0'
 
+      # Se usa Gradle del runner en lugar del wrapper: asi el repositorio no
+      # necesita llevar dentro el gradle-wrapper.jar binario.
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Pruebas del interprete de voz
-        run: gradle :app:testReleaseUnitTest --no-daemon --stacktrace
+      # Las pruebas del interprete corren antes de compilar: si una regla de
+      # interpretacion se rompe, el APK no llega a generarse.
+      - name: Probar y compilar
+        id: construir
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          gradle :app:testReleaseUnitTest :app:assembleRelease \
+            --no-daemon --stacktrace --console=plain 2>&1 | tee registro.txt
 
-      - name: Compilar APK
-        run: gradle :app:assembleRelease --no-daemon --stacktrace
+      # Ver los logs de Actions exige iniciar sesion, incluso en un repositorio
+      # publico. Publicarlos como fichero suelto los deja accesibles con una
+      # simple descarga, que es lo que permite corregir un fallo sin tener que
+      # entrar a la web a copiarlo a mano.
+      - name: Publicar el registro
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p registro
+          cp registro.txt registro/salida.txt 2>/dev/null || echo "sin salida" > registro/salida.txt
+          # Los informes de las pruebas dicen que caso concreto fallo.
+          find app/build/test-results -name "*.xml" -exec cat {} \; \
+            > registro/pruebas.xml 2>/dev/null || true
+          gh release delete registro -y --cleanup-tag 2>/dev/null || true
+          gh release create registro registro/salida.txt registro/pruebas.xml \
+            --title "Registro del ultimo intento" \
+            --notes "Salida completa de la compilacion mas reciente." || true
 
-      - name: Renombrar
+      - name: Renombrar el APK
+        if: steps.construir.outcome == 'success'
         run: |
           mkdir -p salida
           cp app/build/outputs/apk/release/app-release.apk salida/CalendarRemember.apk
 
       - uses: actions/upload-artifact@v4
+        if: steps.construir.outcome == 'success'
         with:
           name: CalendarRemember-APK
           path: salida/CalendarRemember.apk
 
       # Publica el APK en una release fija que siempre apunta a lo ultimo.
-      - name: Publicar en Releases
+      - name: Publicar el APK
+        if: steps.construir.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ultima
@@ -56,3 +82,11 @@ jobs:
             APK de Calendar Remember compilado desde el ultimo commit de main.
             Descarga CalendarRemember.apk e instalalo en el movil.
           files: salida/CalendarRemember.apk
+
+      # El paso de compilar no corta el flujo para que el registro llegue a
+      # publicarse; el resultado real del build se refleja aqui.
+      - name: Resultado
+        if: steps.construir.outcome != 'success'
+        run: |
+          echo "La compilacion fallo. El registro esta en la release 'registro'."
+          exit 1
