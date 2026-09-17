@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
         // Al abrir la app se reprograma todo: es el momento en que se sabe
         // seguro que el proceso está vivo y los datos cargados.
         Programador.reprogramarTodo(this, Almacen.eventos.value)
+        Notificaciones.refrescarAgendaDelDia(this)
 
         setContent {
             TemaCalendarRemember {

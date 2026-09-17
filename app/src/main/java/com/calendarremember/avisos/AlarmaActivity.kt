@@ -1,12 +1,7 @@
 package com.calendarremember.avisos
 
-import android.media.AudioAttributes
-import android.media.MediaPlayer
-import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -45,9 +40,6 @@ import java.time.format.DateTimeFormatter
  */
 class AlarmaActivity : ComponentActivity() {
 
-    private var reproductor: MediaPlayer? = null
-    private var vibrador: Vibrator? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -67,53 +59,32 @@ class AlarmaActivity : ComponentActivity() {
         val id = intent.getStringExtra("evento")
         val evento = id?.let { Almacen.porId(it) }
 
-        sonar()
+        Sonido.arrancar(this)
 
         setContent {
             TemaCalendarRemember {
                 PantallaAlarma(
                     evento = evento,
-                    alDescartar = { callar(); finish() },
+                    alDescartar = { cerrar(evento) },
                     alPosponer = {
                         evento?.let { Pospuestos.posponer(this, it, 10) }
-                        callar()
-                        finish()
+                        cerrar(evento)
                     },
                 )
             }
         }
     }
 
-    private fun sonar() {
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        runCatching {
-            reproductor = MediaPlayer().apply {
-                setDataSource(this@AlarmaActivity, uri)
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-                isLooping = true
-                prepare()
-                start()
-            }
-        }
-        vibrador = getSystemService(Vibrator::class.java)
-        val patron = longArrayOf(0, 600, 400, 600, 400)
-        vibrador?.vibrate(VibrationEffect.createWaveform(patron, 0))
-    }
-
-    private fun callar() {
-        runCatching { reproductor?.stop(); reproductor?.release() }
-        reproductor = null
-        vibrador?.cancel()
+    /** Descartar es callar, quitar el aviso de la barra y cerrar. */
+    private fun cerrar(evento: Evento?) {
+        Sonido.parar()
+        evento?.let { Notificaciones.quitar(this, it.id.hashCode()) }
+        Notificaciones.refrescarAgendaDelDia(this)
+        finish()
     }
 
     override fun onDestroy() {
-        callar()
+        Sonido.parar()
         super.onDestroy()
     }
 }

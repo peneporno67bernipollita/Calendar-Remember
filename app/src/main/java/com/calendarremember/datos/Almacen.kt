@@ -1,6 +1,7 @@
 package com.calendarremember.datos
 
 import android.content.Context
+import com.calendarremember.avisos.Notificaciones
 import com.calendarremember.avisos.Programador
 import com.calendarremember.widget.WidgetProximos
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,9 +17,10 @@ import java.io.File
  * de registros que caben de sobra en memoria. A cambio, la copia de seguridad
  * es el propio fichero y exportarla no cuesta nada.
  *
- * Cada escritura hace tres cosas, siempre juntas, porque olvidar una de ellas
- * es justo lo que produce un evento sin alarma o un widget desactualizado:
- * guardar, reprogramar las alarmas y refrescar el widget.
+ * Cada escritura hace lo mismo, siempre junto, porque olvidar una de esas
+ * cosas es justo lo que produce un evento sin alarma, un widget desfasado o
+ * una agenda que sigue anunciando algo que ya pasó: guardar, reprogramar las
+ * alarmas, refrescar el widget y repintar la agenda del día.
  */
 object Almacen {
 
@@ -50,6 +52,7 @@ object Almacen {
         }
         Programador.reprogramarTodo(contexto, _eventos.value)
         WidgetProximos.refrescar(contexto)
+        Notificaciones.refrescarAgendaDelDia(contexto)
     }
 
     fun guardar(contexto: Context, evento: Evento) {
