@@ -15,6 +15,9 @@ interface Agenda {
     val eventos: List<Evento>
     fun guardar(evento: Evento)
     fun borrar(id: String)
+    /** De una vez: una serie son decenas de eventos, y guardarlos uno a uno es lento. */
+    fun guardarVarios(eventos: List<Evento>) = eventos.forEach { guardar(it) }
+    fun borrarVarios(ids: List<String>) = ids.forEach { borrar(it) }
 }
 
 /** Lo que pasó al atender una orden, y qué decirle al usuario. */
@@ -80,25 +83,49 @@ object Ejecutor {
     // --- Apuntar ----------------------------------------------------------
 
     private fun apuntar(leido: Interpretacion, agenda: Agenda, ahora: LocalDateTime): Respuesta {
+        val repite = leido.repeticion != Repeticion.NINGUNA
         val evento = Evento(
             titulo = leido.titulo,
             inicio = leido.inicio,
             todoElDia = leido.todoElDia,
-            avisos = leido.avisos,
+            avisos = if (repite && !leido.avisosDichos) Series.avisos(leido.repeticion, leido.todoElDia)
+                else leido.avisos,
             duracionMin = leido.duracionMin,
             dictado = leido.dictado,
         )
+
+        if (repite) {
+            val serie = Series.crear(evento, leido.repeticion, ahora.toLocalDate())
+            agenda.guardarVarios(serie)
+            return Respuesta.Hecha(
+                "Apuntado: ${evento.titulo}, ${Series.describir(evento, leido.repeticion)}, " +
+                    "empezando ${cuando(evento, ahora).substringBefore(" a las")}.",
+                true,
+            )
+        }
+
         agenda.guardar(evento)
         if (leido.confianza == Confianza.BAJA) {
             return Respuesta.Hecha(
                 "Apuntado sin título, ${cuando(evento, ahora)}. Revísalo.", false, revisar = evento,
             )
         }
-        // Los eventos que se repiten aún no existen: mejor decirlo que dejar
-        // creer que el martes que viene también sonará.
-        val repeticion = if (leido.repeticion != Repeticion.NINGUNA)
-            " Solo esta vez: todavía no repito eventos." else ""
-        return Respuesta.Hecha("Apuntado: ${evento.titulo}, ${cuando(evento, ahora)}.$repeticion", true)
+        return Respuesta.Hecha("Apuntado: ${evento.titulo}, ${cuando(evento, ahora)}.", true)
+    }
+
+    /**
+     * El evento del que se habla. Si hay un favorito claro, ese. Si empatan
+     * varias repeticiones de una misma serie ("cancela la clase de yoga", y
+     * hay una cada martes), se entiende la próxima: es de la que se habla.
+     */
+    private fun elegirUno(encontrados: List<Buscador.Candidato>, ahora: LocalDateTime): Evento? {
+        Buscador.unico(encontrados)?.let { return it }
+        val mejor = encontrados.firstOrNull()?.puntos ?: return null
+        val empatados = encontrados.filter { it.puntos == mejor }.map { it.evento }
+        val serie = empatados.first().serie ?: return null
+        if (empatados.any { it.serie != serie }) return null
+        return empatados.filter { !it.inicio.isBefore(ahora) }.minByOrNull { it.inicio }
+            ?: empatados.maxBy { it.inicio }
     }
 
     // --- Cancelar ---------------------------------------------------------
@@ -111,7 +138,7 @@ object Ejecutor {
             val dia = leido.inicio.toLocalDate()
             val delDia = agenda.eventos.filter { it.inicio.toLocalDate() == dia }
             if (delDia.isEmpty()) return Respuesta.Hecha("${etiquetaDia(dia, ahora)} no tienes nada.", false)
-            delDia.forEach { agenda.borrar(it.id) }
+            agenda.borrarVarios(delDia.map { it.id })
             val cuantos = if (delDia.size == 1) "Borrado" else "Borrados ${delDia.size} eventos"
             return Respuesta.Hecha(
                 "$cuantos de ${etiquetaDia(dia, ahora).replaceFirstChar { it.lowercase() }}: " +
@@ -121,7 +148,26 @@ object Ejecutor {
 
         val encontrados = buscar(leido, agenda, ahora)
         if (encontrados.isEmpty()) return noEncontrada(leido, "cancelar")
-        Buscador.unico(encontrados)?.let { return borrar(it, agenda, ahora) }
+
+        // "Borra la clase de yoga de todos los martes", "cancela todas las
+        // clases de yoga": la serie entera, no solo la próxima.
+        val todas = leido.repeticion != Repeticion.NINGUNA ||
+            Regex("""\b(?:todos|todas|siempre)\b""").containsMatchIn(sinTildes(leido.titulo))
+        val serie = encontrados.first().evento.serie
+        if (todas && serie != null) {
+            val deLaSerie = agenda.eventos.filter { it.serie == serie }
+            agenda.borrarVarios(deLaSerie.map { it.id })
+            val primera = deLaSerie.minBy { it.inicio }
+            return Respuesta.Hecha(
+                "Borrado: ${primera.titulo}, ${Series.describir(primera, primera.repeticion)}.", true,
+            )
+        }
+
+        elegirUno(encontrados, ahora)?.let { evento ->
+            val resto = if (evento.serie != null) " Las demás siguen." else ""
+            agenda.borrar(evento.id)
+            return Respuesta.Hecha("Borrado: ${evento.titulo}, ${cuando(evento, ahora)}.$resto", true)
+        }
         return Respuesta.Elegir("¿Cuál borro?", encontrados.take(4).map { it.evento }, leido)
     }
 
@@ -136,7 +182,7 @@ object Ejecutor {
         if (sinPistas(leido)) return Respuesta.Hecha("Dime qué evento cambio.", false)
         val encontrados = buscar(leido, agenda, ahora)
         if (encontrados.isEmpty()) return noEncontrada(leido, "cambiar")
-        Buscador.unico(encontrados)?.let { return mover(leido, it, agenda, ahora) }
+        elegirUno(encontrados, ahora)?.let { return mover(leido, it, agenda, ahora) }
         return Respuesta.Elegir("¿Cuál cambio?", encontrados.take(4).map { it.evento }, leido)
     }
 
@@ -185,6 +231,12 @@ object Ejecutor {
                 val encontrados = Buscador.candidatos(leido.titulo, null, agenda.eventos, ahora)
                 if (encontrados.isEmpty()) {
                     return Respuesta.Hecha("No encuentro nada parecido a «${leido.titulo}».", false)
+                }
+                // Algo que se repite: se contesta con la próxima vez.
+                elegirUno(encontrados, ahora)?.takeIf { it.serie != null }?.let { e ->
+                    return Respuesta.Hecha(
+                        "${e.titulo} es ${Series.describir(e, e.repeticion)}. La próxima, ${cuando(e, ahora)}.", true,
+                    )
                 }
                 val mejor = encontrados.first().puntos
                 val empatados = encontrados.filter { it.puntos == mejor }.map { it.evento }.sortedBy { it.inicio }

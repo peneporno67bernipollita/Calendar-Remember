@@ -281,11 +281,14 @@ class EscuchaServicio : Service() {
             principal.postDelayed({ actualizar() }, 2_000)
             return
         }
-        val reconocedor = Recognizer(m, FRECUENCIA.toFloat(), GRAMATICA)
+        // Todo dentro del try: un error sin recoger en un hilo propio cierra la
+        // app entera, no solo la escucha.
+        var reconocedor: Recognizer? = null
         val trozo = ShortArray(MUESTRAS_TROZO)
         var seguidos = 0
         var fallo = false
         try {
+            reconocedor = Recognizer(m, FRECUENCIA.toFloat(), GRAMATICA)
             micro.startRecording()
             while (capturando) {
                 val leidas = micro.read(trozo, 0, trozo.size)
@@ -307,12 +310,12 @@ class EscuchaServicio : Service() {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             fallo = true
         } finally {
             runCatching { micro.stop() }
-            micro.release()
-            reconocedor.close()
+            runCatching { micro.release() }
+            runCatching { reconocedor?.close() }
         }
         if (fallo) {
             capturando = false
@@ -375,13 +378,14 @@ class EscuchaServicio : Service() {
      */
     private fun transcribir(m: Model): String {
         val micro = abrirMicro() ?: return ""
-        val reconocedor = Recognizer(m, FRECUENCIA.toFloat())
+        var reconocedor: Recognizer? = null
         val trozo = ShortArray(MUESTRAS_TROZO)
         val inicio = SystemClock.elapsedRealtime()
         var texto = ""
         var hablado = false
         var ultimoParcial = ""
         try {
+            reconocedor = Recognizer(m, FRECUENCIA.toFloat())
             micro.startRecording()
             while (SystemClock.elapsedRealtime() - inicio < 10_000) {
                 val leidas = micro.read(trozo, 0, trozo.size)
@@ -402,12 +406,12 @@ class EscuchaServicio : Service() {
                 }
             }
             if (texto.isBlank()) texto = JSONObject(reconocedor.finalResult).optString("text")
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             // Lo que se haya entendido hasta aquí, si algo.
         } finally {
             runCatching { micro.stop() }
-            micro.release()
-            reconocedor.close()
+            runCatching { micro.release() }
+            runCatching { reconocedor?.close() }
         }
         return texto.trim()
     }

@@ -49,6 +49,8 @@ data class Interpretacion(
     val dictado: String,
     val confianza: Confianza,
     val repeticion: Repeticion = Repeticion.NINGUNA,
+    /** Si los avisos se dijeron ("avísame dos días antes") o son los de siempre. */
+    val avisosDichos: Boolean = false,
     // Para MOVER: a dónde va el evento. Lo que no se dijo, no se toca.
     val nuevaFecha: LocalDate? = null,
     val nuevaHora: LocalTime? = null,
@@ -828,6 +830,7 @@ object Interprete {
             dictado = original,
             confianza = Confianza.ALTA,
             repeticion = repeticion,
+            avisosDichos = avisos != null,
         )
     }
 

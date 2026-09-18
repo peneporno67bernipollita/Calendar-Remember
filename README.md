@@ -3,13 +3,11 @@
 Calendario y recordatorios por voz para Android. Negro con luces de neón,
 todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
 
-- **Palabra clave** — con la pantalla encendida, di «Nébula» y se abre el
-  dictado, también sobre la pantalla de bloqueo.
-- **Cancelar dictando** — «cancela la cena del viernes» busca a qué te
-  refieres y lo borra.
-- **Dictado en español** — «cita con el dentista el martes a las cinco y
-  media» se convierte en un evento el martes a las 17:30. Lo entiende la
-  propia app, sin enviar nada a ningún sitio.
+- **Palabra clave** — con la pantalla encendida, di «Nébula» y te escucha,
+  también sobre la pantalla de bloqueo.
+- **Cuatro órdenes por voz** — apuntar, cancelar, cambiar de fecha u hora, y
+  preguntar qué tienes. Sin confirmaciones: si está claro, lo hace y lo dice.
+- **Repeticiones** — «todos los martes», «cada día», «todos los años».
 - **Alarma el día del evento** — suena como un despertador y sale a pantalla
   completa sobre el bloqueo, aunque el móvil lleve horas suspendido.
 - **Avisos los días antes** — cada evento elige sus antelaciones: una semana,
@@ -34,62 +32,76 @@ todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
 No hace falta Android Studio ni compilar nada: cada cambio en `main` genera
 un APK nuevo automáticamente.
 
-## Dictar un evento
+## Hablarle
 
-**Diciendo «Nébula»** con la pantalla encendida, en el inicio o en el bloqueo:
-se abre el dictado y, al terminar, te responde en voz alta. Se activa en
-*Ajustes → Escuchar «Nébula»*, que guía por los permisos que hacen falta
-(en Xiaomi, varios). Con la pantalla apagada no escucha nada.
+**Diciendo «Nébula»** con la pantalla encendida, en el inicio o en el
+bloqueo. Se activa en *Ajustes → Escuchar «Nébula»*, que guía por los
+permisos que hacen falta (en Xiaomi, varios). Con la pantalla apagada no
+escucha nada.
 
-El motor de voz sin conexión no conoce la palabra «nébula», pero limitado a
-una sola palabra cercana que sí conoce, «nebulosa», la reconoce y rechaza lo
-demás («novela», «nevera», una charla normal). Se probó con audio antes de
-montarlo así.
+Al oírte abre el círculo de dictado. Si el sistema no le deja abrirlo —falta
+el permiso de mostrarse sobre otras apps, o MIUI lo bloquea sin avisar—, te
+atiende igual: suena un pitido, lo dices, y te contesta en voz alta. Nunca
+hay que tocar nada para que escuche. Los ajustes dicen qué permiso falta para
+tener el círculo.
+
+### Cómo distingue «Nébula»
+
+Está medido, no supuesto. El motor sin conexión no conoce la palabra; la oye
+como «nebulosa». Si solo pudiera elegir entre «nebulosa» y nada, cualquier
+cosa parecida («me mola», «me gusta») caería en «nebulosa», y con la misma
+confianza que un «Nébula» de verdad. Por eso compite con 121 palabras
+corrientes, y además tiene que mantenerse medio segundo. Con audio de prueba:
+
+| | Antes | Ahora |
+|---|---|---|
+| «Nébula» dicho en una conversación | — | 12 de 12 |
+| Falsas activaciones en charla normal | 9 en 43 s | 0 en 140 s |
+| Frases parecidas sueltas («me mola», «de bola»...) | 37 de 240 | 2 de 240 |
 
 Y sin palabra clave, cuatro caminos más, todos sin desbloquear:
 
-- **Ajustes rápidos**: baja la persiana y toca «Dictar». Se llega desde la
-  pantalla de bloqueo.
-- **Icono suelto**: mantén pulsado el icono de la app, arrastra «Dictar» a la
-  pantalla de inicio y queda como un acceso directo propio.
-- **Gesto del sistema**: la app responde al gesto de asistente, así que se
-  puede abrir manteniendo pulsado el botón de encendido si se configura como
-  asistente. En MIUI, *Configuración adicional → Atajos de gestos* permite
-  además asignarla a un gesto cualquiera.
+- **Ajustes rápidos**: baja la persiana y toca «Dictar».
+- **Icono suelto**: mantén pulsado el icono de la app y arrastra «Dictar» a la
+  pantalla de inicio.
+- **Gesto del sistema**: la app responde al gesto de asistente. En MIUI,
+  *Configuración adicional → Atajos de gestos* permite asignarla a un gesto.
 - **Dentro de la app**: el botón grande de abajo.
-
-La app repite en voz baja lo que ha entendido —día y hora completos— para que
-un error se note en el momento. Si no entiende de qué va el evento, abre la
-ficha para que la corrijas en vez de guardar algo torcido.
 
 ### Lo que entiende
 
-| Dices | Guarda |
+| Dices | Hace |
 |---|---|
-| mañana a las nueve | el día siguiente, 09:00 |
-| el martes a las cinco y media | próximo martes, 17:30 |
-| el 25 de octubre | ese día, sin hora |
-| dentro de dos horas | dos horas desde ahora |
-| el viernes a las 21:30 | próximo viernes, 21:30 |
-| a las siete menos cuarto de la mañana | 06:45 |
-| el día 1 | el día 1 del mes que viene |
+| mañana a las cinco cena con Marta | apunta para mañana a las 17:00 |
+| el martes 29 a las 9 y cuarto | ese día a las 09:15 |
+| sobre las 6 / a eso de las 7 | 18:00 / 19:00 |
+| reunión de 5 a 7 | a las 17:00, dos horas |
+| el lunes por la mañana | el lunes a las 09:00 |
+| en 10 minutos / dentro de media hora | desde ahora |
+| el lunes que viene | el lunes siguiente (dicho un jueves, el de dentro de 4 días) |
+| del 1 al 15 de agosto | empieza el 1 |
+| cena de Nochebuena | el 24 de diciembre, con la fiesta en el título |
+| clase de yoga todos los martes a las 7 | todos los martes a las 19:00 |
 | ...avísame dos días antes | cambia la antelación del aviso |
-| ...durante dos horas | fija la duración |
-| el finde | el sábado que viene |
-| cancela la cena del viernes | busca esa cena y la borra |
-| lo del finde, cancélalo | busca por fecha cuando no recuerdas el nombre |
+| cancela la cena del viernes | la borra |
+| ya no voy al gimnasio mañana | lo borra |
+| cancela todo lo de mañana | borra todo lo de ese día |
+| cancela la clase de yoga | borra la próxima; las demás siguen |
+| borra todas las clases de yoga | borra la serie entera |
+| pasa la cena del viernes al sábado | la mueve de día, a la misma hora |
+| retrasa la reunión una hora | la mueve una hora |
+| ¿qué tengo mañana? | te lo dice |
+| ¿cuándo es el cumpleaños de Laura? | te lo dice |
+| ¿cuál es mi próximo evento? | te lo dice |
 
-Las horas sin más ("a las cinco") se entienden como la tarde entre la una y
+Las horas sin más («a las cinco») se entienden como la tarde entre la una y
 las siete, y como la mañana de las ocho en adelante, que es como se habla.
-Para forzarlo: "de la mañana", "de la tarde".
+Con una cena, una fiesta o «esta noche» de por medio, «a las diez» son las
+22:00. Para forzarlo: «de la mañana», «de la tarde».
 
-## Cancelar un evento
-
-Vale decirlo por delante («cancela la cena del viernes») o por detrás
-(«lo del finde, cancélalo»), que es como sale al hablar. Busca entre lo que
-tienes por el texto, la fecha y la hora, y **si está claro qué evento es, lo
-borra sin preguntar** y te lo dice. Solo pregunta cuál cuando dos encajan por
-igual. Si ninguno encaja, ofrece apuntar la frase, por si era eso.
+Cuando dos eventos encajan por igual en lo que dices, pregunta cuál; es lo
+único que pregunta. Si nada encaja, lo dice y ofrece apuntar la frase, por si
+era eso.
 
 ## Estructura
 
@@ -98,32 +110,42 @@ app/src/main/java/com/calendarremember/
   MainActivity.kt          Pantalla principal y permisos
   datos/     Evento.kt      Un evento y su paso a JSON
              Almacen.kt     Todos los eventos en un fichero, y su guardado
-  voz/       Interprete.kt  Convierte la frase dictada en un evento o una orden
-             Buscador.kt    Encuentra de qué evento habla una cancelación
-             VozActivity.kt Dictar de un toque, sin abrir el calendario
-             TileVoz.kt     El botón de dictado de los ajustes rápidos
+             Preferencias.kt Los ajustes
+  voz/       Interprete.kt  La frase dictada, convertida en una orden
+             Ejecutor.kt    Hace la orden y dice qué ha hecho
+             Buscador.kt    De qué evento habla una orden
+             Series.kt      Lo que se repite
+             EscuchaServicio.kt  Escucha «Nébula»
+             VozActivity.kt El círculo de dictado
+             ModeloVoz.kt   El modelo de voz sin conexión
+             TileVoz.kt     El botón de los ajustes rápidos
   avisos/    Programador.kt Pone las alarmas en el sistema
              ReceptorAviso.kt  Lo que corre cuando salta una
              AlarmaActivity.kt La pantalla de la alarma
              Notificaciones.kt Canales y textos de los avisos
   widget/    WidgetProximos.kt El widget de la pantalla de inicio
-  ui/        Tema.kt, Pantalla.kt, DialogoEvento.kt, DialogoAjustes.kt
+  ui/        Pantallas y diálogos
 ```
 
 Los eventos viven en `eventos.json`, dentro de la app. **Ajustes → Exportar
-copia** lo saca entero para guardarlo o pasarlo a otro móvil.
+copia** lo saca entero para guardarlo o pasarlo a otro móvil. Lo que se
+repite se guarda como eventos normales de una misma serie, creados por
+adelantado (60 días lo diario, medio año lo semanal); la pasada de medianoche
+los va alargando.
 
 ## Compilar
 
 No hace falta en local: `.github/workflows/apk.yml` lo hace en cada push y
-publica el APK en Releases. Si quieres hacerlo en tu máquina, con JDK 17:
+publica el APK en Releases. El modelo de voz (40 MB) no está en el
+repositorio: lo descarga la compilación. En una máquina con JDK 17:
 
 ```bash
 gradle :app:assembleRelease
 ```
 
-Las pruebas del intérprete de voz corren antes de cada compilación, así que
-si una regla de interpretación se rompe, el APK no llega a generarse.
+Las pruebas corren antes de cada compilación: unas 250 frases dictadas y lo
+que cada orden hace en la agenda. Si algo se rompe, el APK no llega a
+generarse.
 
 ## Lo que no hace, y por qué
 
@@ -132,7 +154,5 @@ si una regla de interpretación se rompe, el APK no llega a generarse.
   batería y no aporta nada a «enciendo el móvil y le hablo».
 - **Widget en la pantalla de bloqueo.** No depende de la app: Android retiró
   los widgets de terceros del bloqueo y solo los ha devuelto a partir de la
-  versión 14, en tablets. El widget ya se declara apto para esa ubicación, así
-  que aparecerá en los dispositivos que lleguen a admitirlo. Mientras tanto,
-  la notificación-agenda cumple esa función.
-- Eventos que se repiten.
+  versión 14, en tablets. El widget ya se declara apto para esa ubicación.
+  Mientras tanto, la notificación-agenda cumple esa función.

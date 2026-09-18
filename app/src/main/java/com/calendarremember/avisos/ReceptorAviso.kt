@@ -59,6 +59,9 @@ class ReceptorAviso : BroadcastReceiver() {
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED -> {
+                // Las series ("todos los martes") se alargan antes de
+                // reprogramar, para que las nuevas repeticiones entren ya.
+                Almacen.alargarSeries(contexto)
                 // Al reiniciar el móvil Android borra todas las alarmas
                 // programadas. Sin esto, los avisos se perderían en silencio.
                 Programador.reprogramarTodo(contexto, Almacen.eventos.value)

@@ -24,6 +24,14 @@ data class Evento(
     /** Lo que se dictó, si vino por voz. Sirve para afinar el intérprete. */
     val dictado: String? = null,
     val creado: Long = System.currentTimeMillis(),
+    /**
+     * Las repeticiones de "todos los martes" son eventos normales que
+     * comparten serie: así el calendario, las alarmas y el widget no tienen
+     * que saber nada de repeticiones. La serie permite borrarlas todas a la
+     * vez, y seguir alargándolas según pasa el tiempo.
+     */
+    val serie: String? = null,
+    val repeticion: com.calendarremember.voz.Repeticion = com.calendarremember.voz.Repeticion.NINGUNA,
 ) {
     val inicioMillis: Long
         get() = inicio.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -54,6 +62,8 @@ data class Evento(
         put("duracionMin", duracionMin ?: JSONObject.NULL)
         put("dictado", dictado ?: JSONObject.NULL)
         put("creado", creado)
+        put("serie", serie ?: JSONObject.NULL)
+        put("repeticion", repeticion.name)
     }
 
     companion object {
@@ -76,6 +86,12 @@ data class Evento(
                 duracionMin = if (o.isNull("duracionMin")) null else o.optInt("duracionMin"),
                 dictado = o.optString("dictado").takeIf { it.isNotBlank() && it != "null" },
                 creado = o.optLong("creado", System.currentTimeMillis()),
+                // Los eventos guardados antes de que hubiera series no traen
+                // estos campos: se leen como eventos sueltos.
+                serie = o.optString("serie").takeIf { it.isNotBlank() && it != "null" },
+                repeticion = runCatching {
+                    com.calendarremember.voz.Repeticion.valueOf(o.optString("repeticion"))
+                }.getOrDefault(com.calendarremember.voz.Repeticion.NINGUNA),
             )
         }
     }

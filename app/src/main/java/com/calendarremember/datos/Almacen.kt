@@ -68,6 +68,31 @@ object Almacen {
         persistir(contexto)
     }
 
+    /**
+     * Varios de una vez, con una sola escritura. Una serie diaria son sesenta
+     * eventos: guardarlos uno a uno reescribiría el fichero y reprogramaría
+     * todas las alarmas sesenta veces seguidas.
+     */
+    fun guardarVarios(contexto: Context, nuevos: List<Evento>) {
+        if (nuevos.isEmpty()) return
+        val porId = _eventos.value.associateBy { it.id }.toMutableMap()
+        nuevos.forEach { porId[it.id] = it }
+        _eventos.value = porId.values.sortedBy { it.inicioMillis }
+        persistir(contexto)
+    }
+
+    fun borrarVarios(contexto: Context, ids: List<String>) {
+        if (ids.isEmpty()) return
+        val fuera = ids.toSet()
+        _eventos.value = _eventos.value.filterNot { it.id in fuera }
+        persistir(contexto)
+    }
+
+    /** Alarga las series que se acercan a su final. Lo llama la pasada de medianoche. */
+    fun alargarSeries(contexto: Context) {
+        guardarVarios(contexto, com.calendarremember.voz.Series.alargar(_eventos.value, java.time.LocalDate.now()))
+    }
+
     fun porId(id: String): Evento? = _eventos.value.firstOrNull { it.id == id }
 
     /** El almacén visto como la agenda sobre la que trabajan las órdenes de voz. */
@@ -76,6 +101,8 @@ object Almacen {
             override val eventos: List<Evento> get() = _eventos.value
             override fun guardar(evento: Evento) = guardar(contexto, evento)
             override fun borrar(id: String) = borrar(contexto, id)
+            override fun guardarVarios(eventos: List<Evento>) = guardarVarios(contexto, eventos)
+            override fun borrarVarios(ids: List<String>) = borrarVarios(contexto, ids)
         }
 
     /** Eventos de hoy en adelante, que es lo que mira el widget. */

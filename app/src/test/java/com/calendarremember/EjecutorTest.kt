@@ -51,9 +51,86 @@ class EjecutorTest {
         assertEquals(LocalDateTime.of(2026, 9, 18, 9, 0), a.porTitulo("Comprar pan").inicio)
     }
 
-    @Test fun avisaDeQueNoRepite() {
-        val r = decir("Clase de yoga todos los martes a las 7", agenda())
-        assertTrue(mensaje(r), mensaje(r).contains("Solo esta vez"))
+    // --- Lo que se repite ---------------------------------------------------
+
+    @Test fun apuntaUnaSerie() {
+        val a = agenda()
+        val r = decir("Clase de yoga todos los martes a las 7", a)
+        assertEquals(
+            "Apuntado: Clase de yoga, todos los martes a las 19:00, empezando el martes 22.",
+            mensaje(r),
+        )
+        val yoga = a.lista.filter { it.titulo == "Clase de yoga" }.sortedBy { it.inicio }
+        // Medio año de martes, todos a la misma hora y de la misma serie.
+        assertTrue("${yoga.size} clases", yoga.size in 25..27)
+        assertEquals(LocalDateTime.of(2026, 9, 22, 19, 0), yoga.first().inicio)
+        assertEquals(LocalDateTime.of(2026, 9, 29, 19, 0), yoga[1].inicio)
+        assertTrue(yoga.all { it.serie == yoga.first().serie && it.inicio.dayOfWeek == java.time.DayOfWeek.TUESDAY })
+    }
+
+    @Test fun cadaDiaSuenaSoloASuHora() {
+        val a = agenda()
+        decir("Cada día a las 9 tomar la pastilla", a)
+        val pastillas = a.lista.filter { it.titulo == "Tomar la pastilla" }
+        assertTrue("${pastillas.size} días", pastillas.size in 59..61)
+        // Un aviso el día antes para algo de cada día sería ruido.
+        assertTrue(pastillas.all { it.avisos == listOf(0) })
+    }
+
+    @Test fun cancelarUnaDeLaSerieEsLaProxima() {
+        val a = agenda()
+        decir("Clase de yoga todos los martes a las 7", a)
+        val antes = a.lista.count { it.titulo == "Clase de yoga" }
+        val r = decir("Cancela la clase de yoga", a)
+        assertTrue(mensaje(r), mensaje(r).startsWith("Borrado: Clase de yoga, el martes 22"))
+        assertTrue(mensaje(r), mensaje(r).contains("Las demás siguen"))
+        assertEquals(antes - 1, a.lista.count { it.titulo == "Clase de yoga" })
+        assertTrue(a.lista.none { it.titulo == "Clase de yoga" && it.inicio.dayOfMonth == 22 && it.monthValue() == 9 })
+    }
+
+    private fun Evento.monthValue() = inicio.monthValue
+
+    @Test fun cancelarTodaLaSerie() {
+        val a = agenda()
+        decir("Clase de yoga todos los martes a las 7", a)
+        val r = decir("Borra todas las clases de yoga", a)
+        assertEquals("Borrado: Clase de yoga, todos los martes a las 19:00.", mensaje(r))
+        assertTrue(a.lista.none { it.titulo == "Clase de yoga" })
+        assertEquals(4, a.lista.size)
+    }
+
+    @Test fun cuandoEsAlgoQueSeRepite() {
+        val a = agenda()
+        decir("Clase de yoga todos los martes a las 7", a)
+        val r = decir("¿Cuándo es la clase de yoga?", a)
+        assertEquals(
+            "Clase de yoga es todos los martes a las 19:00. La próxima, el martes 22 a las 19:00.",
+            mensaje(r),
+        )
+    }
+
+    @Test fun cadaMesSinArrastrarElDia() {
+        // Una serie del 31: en los meses de 30 cae el 30, pero el mes
+        // siguiente vuelve al 31.
+        val base = Evento(titulo = "Nómina", inicio = LocalDateTime.of(2026, 10, 31, 0, 0), todoElDia = true)
+        val serie = com.calendarremember.voz.Series.crear(
+            base, com.calendarremember.voz.Repeticion.MENSUAL, LocalDateTime.of(2026, 9, 17, 12, 0).toLocalDate(),
+        )
+        assertEquals(listOf(31, 30, 31, 31), serie.take(4).map { it.inicio.dayOfMonth })
+    }
+
+    @Test fun lasSeriesSeAlargan() {
+        val a = agenda()
+        decir("Cada día a las 9 tomar la pastilla", a)
+        val ultimaAntes = a.lista.filter { it.titulo == "Tomar la pastilla" }.maxOf { it.inicio }
+        // Cuarenta días después, le queda menos de la mitad: se alarga.
+        val dentroDe40 = LocalDateTime.of(2026, 10, 27, 12, 0).toLocalDate()
+        val nuevas = com.calendarremember.voz.Series.alargar(a.lista, dentroDe40)
+        assertTrue("${nuevas.size} nuevas", nuevas.isNotEmpty())
+        assertTrue(nuevas.all { it.inicio.isAfter(ultimaAntes) && it.inicio.hour == 9 })
+        assertEquals(dentroDe40.plusDays(60), nuevas.maxOf { it.inicio }.toLocalDate())
+        // Y si aún llega de sobra, no se toca.
+        assertTrue(com.calendarremember.voz.Series.alargar(a.lista, ahora.toLocalDate()).isEmpty())
     }
 
     // --- Cancelar -----------------------------------------------------------
