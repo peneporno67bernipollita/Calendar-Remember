@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.calendarremember.FrasesTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-18T22:33:15" hostname="runnervmlun5p" time="0.482">
+  <properties/>
+  <testcase name="lasFrasesDeLosBarridos" classname="com.calendarremember.FrasesTest" time="0.482"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.calendarremember.InterpreteTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-09-18T22:33:29" hostname="runnervmlun5p" time="0.016">
+  <properties/>
+  <testcase name="numeroSueltoNoEsHora" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="fechaNumericaConHoraYAviso" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="diaDelMesQueYaPasoSaltaAlSiguiente" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="estaNoche" classname="com.calendarremember.InterpreteTest" time="0.002"/>
+  <testcase name="lunesQueViene" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="sinFechaNiHoraEsHoyYDudoso" classname="com.calendarremember.InterpreteTest" time="0.0"/>
+  <testcase name="pasadoMananaConDuracion" classname="com.calendarremember.InterpreteTest" time="0.0"/>
+  <testcase name="duracionSeRecoge" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="fechaConMesYSinHora" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="horaQueYaPasoSaltaAlDiaSiguiente" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="avisoExplicitoSeRespeta" classname="com.calendarremember.InterpreteTest" time="0.0"/>
+  <testcase name="recordatorioParaManana" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="citaConDiaDeLaSemanaYMediaHora" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="horaConMinutosExplicitos" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="deLaMananaNoEsElDiaSiguiente" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="menosCuartoDeLaManana" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <testcase name="dentroDeDosHoras" classname="com.calendarremember.InterpreteTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.calendarremember.CancelarTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-09-18T22:33:14" hostname="runnervmlun5p" time="0.297">
+  <properties/>
+  <testcase name="soloCrearIgnoraLaOrden" classname="com.calendarremember.CancelarTest" time="0.157"/>
+  <testcase name="mencionarCancelarNoBorra" classname="com.calendarremember.CancelarTest" time="0.013"/>
+  <testcase name="encuentraPorTexto" classname="com.calendarremember.CancelarTest" time="0.003"/>
+  <testcase name="elFindeEsElSabado" classname="com.calendarremember.CancelarTest" time="0.011"/>
+  <testcase name="borrarTambienVale" classname="com.calendarremember.CancelarTest" time="0.014"/>
+  <testcase name="frasesHabladasQueBorran" classname="com.calendarremember.CancelarTest" time="0.034"/>
+  <testcase name="encuentraConVariacionesDePalabra" classname="com.calendarremember.CancelarTest" time="0.001"/>
+  <testcase name="apuntarSigueSiendoLoNormal" classname="com.calendarremember.CancelarTest" time="0.002"/>
+  <testcase name="loDeLasDiezSeBuscaPorLaHora" classname="com.calendarremember.CancelarTest" time="0.003"/>
+  <testcase name="sinNadaParecidoNoDevuelveNada" classname="com.calendarremember.CancelarTest" time="0.001"/>
+  <testcase name="cancelarConElVerboDetras" classname="com.calendarremember.CancelarTest" time="0.003"/>
+  <testcase name="encuentraPorFechaAunqueElTextoSeaPobre" classname="com.calendarremember.CancelarTest" time="0.002"/>
+  <testcase name="frasesHabladasQueNoBorran" classname="com.calendarremember.CancelarTest" time="0.023"/>
+  <testcase name="loDeMananaSeBuscaPorElDia" classname="com.calendarremember.CancelarTest" time="0.006"/>
+  <testcase name="elEmpateNoSeResuelveSolo" classname="com.calendarremember.CancelarTest" time="0.001"/>
+  <testcase name="cancelarConElVerboDelante" classname="com.calendarremember.CancelarTest" time="0.002"/>
+  <testcase name="elCriterioSaleLimpio" classname="com.calendarremember.CancelarTest" time="0.01"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.calendarremember.CorpusTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-18T22:33:14" hostname="runnervmlun5p" time="0.349">
+  <properties/>
+  <testcase name="cambiarNoSeConfundeConTareas" classname="com.calendarremember.CorpusTest" time="0.019"/>
+  <testcase name="preguntar" classname="com.calendarremember.CorpusTest" time="0.02"/>
+  <testcase name="apuntar" classname="com.calendarremember.CorpusTest" time="0.234"/>
+  <testcase name="cancelar" classname="com.calendarremember.CorpusTest" time="0.015"/>
+  <testcase name="repeticiones" classname="com.calendarremember.CorpusTest" time="0.008"/>
+  <testcase name="cambiar" classname="com.calendarremember.CorpusTest" time="0.032"/>
+  <testcase name="duraciones" classname="com.calendarremember.CorpusTest" time="0.005"/>
+  <testcase name="preguntarNoSeConfundeConApuntar" classname="com.calendarremember.CorpusTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.calendarremember.VariosDiasTest" tests="22" skipped="0" failures="0" errors="0" timestamp="2026-09-18T22:33:29" hostname="runnervmlun5p" time="0.079">
+  <properties/>
+  <testcase name="deLunesAViernesParaDespertar" classname="com.calendarremember.VariosDiasTest" time="0.003"/>
+  <testcase name="seGuardaYSeLee" classname="com.calendarremember.VariosDiasTest" time="0.014"/>
+  <testcase name="elViajeDuraHasta" classname="com.calendarremember.VariosDiasTest" time="0.008"/>
+  <testcase name="alargarYAcortarPorDias" classname="com.calendarremember.VariosDiasTest" time="0.004"/>
+  <testcase name="borraLoUltimoQueSeApunto" classname="com.calendarremember.VariosDiasTest" time="0.006"/>
+  <testcase name="alargarHastaUnDia" classname="com.calendarremember.VariosDiasTest" time="0.005"/>
+  <testcase name="cambiaLoUltimo" classname="com.calendarremember.VariosDiasTest" time="0.002"/>
+  <testcase name="moverloLoMueveEntero" classname="com.calendarremember.VariosDiasTest" time="0.005"/>
+  <testcase name="cadaDosSemanas" classname="com.calendarremember.VariosDiasTest" time="0.004"/>
+  <testcase name="cuandoEsAlgoDeVariosDias" classname="com.calendarremember.VariosDiasTest" time="0.003"/>
+  <testcase name="cancelaElViaje" classname="com.calendarremember.VariosDiasTest" time="0.001"/>
+  <testcase name="borrarLoUltimoSiEraUnaSerieLaBorraEntera" classname="com.calendarremember.VariosDiasTest" time="0.004"/>
+  <testcase name="elDiaQueEmpiezaTambien" classname="com.calendarremember.VariosDiasTest" time="0.001"/>
+  <testcase name="unDiaDelViajeLoIncluye" classname="com.calendarremember.VariosDiasTest" time="0.001"/>
+  <testcase name="loEncuentraPorUnDiaDeEnMedio" classname="com.calendarremember.VariosDiasTest" time="0.001"/>
+  <testcase name="seAlarganLasDosCadenas" classname="com.calendarremember.VariosDiasTest" time="0.002"/>
+  <testcase name="cadaQuinceDias" classname="com.calendarremember.VariosDiasTest" time="0.001"/>
+  <testcase name="etiquetasCortas" classname="com.calendarremember.VariosDiasTest" time="0.001"/>
+  <testcase name="alargarUnaReunionEsAlargarSuDuracion" classname="com.calendarremember.VariosDiasTest" time="0.002"/>
+  <testcase name="apuntaElViajeDelDiaVeintisieteAlVeinticincoDelMesSiguiente" classname="com.calendarremember.VariosDiasTest" time="0.001"/>
+  <testcase name="seBorraEntera" classname="com.calendarremember.VariosDiasTest" time="0.003"/>
+  <testcase name="losMartesYJueves" classname="com.calendarremember.VariosDiasTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.calendarremember.ConversacionTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-09-18T22:33:14" hostname="runnervmlun5p" time="0.248">
+  <properties/>
+  <testcase name="sinRespuestaSeApuntaIgualYSeDiceComoCambiarlo" classname="com.calendarremember.ConversacionTest" time="0.016"/>
+  <testcase name="unEventoSinNombrePreguntaQueApunta" classname="com.calendarremember.ConversacionTest" time="0.042"/>
+  <testcase name="cambiarUnaPalabraPorOtra" classname="com.calendarremember.ConversacionTest" time="0.089"/>
+  <testcase name="retrasaloUnaHora" classname="com.calendarremember.ConversacionTest" time="0.007"/>
+  <testcase name="noLoApuntaDosVeces" classname="com.calendarremember.ConversacionTest" time="0.003"/>
+  <testcase name="laRespuestaPuedeTraerLaHora" classname="com.calendarremember.ConversacionTest" time="0.003"/>
+  <testcase name="avisarAntesDeUnoQueYaExiste" classname="com.calendarremember.ConversacionTest" time="0.001"/>
+  <testcase name="ningunoNoTocaNada" classname="com.calendarremember.ConversacionTest" time="0.002"/>
+  <testcase name="cambialeElNombreAloQueSeAcabaDeApuntar" classname="com.calendarremember.ConversacionTest" time="0.003"/>
+  <testcase name="porElDia" classname="com.calendarremember.ConversacionTest" time="0.003"/>
+  <testcase name="porOrden" classname="com.calendarremember.ConversacionTest" time="0.002"/>
+  <testcase name="decirQueNoEsNoApuntarNada" classname="com.calendarremember.ConversacionTest" time="0.001"/>
+  <testcase name="cualBorroSeContestaHablando" classname="com.calendarremember.ConversacionTest" time="0.019"/>
+  <testcase name="sinContextoPregunta" classname="com.calendarremember.ConversacionTest" time="0.004"/>
+  <testcase name="elNombreDeUnoConcreto" classname="com.calendarremember.ConversacionTest" time="0.003"/>
+  <testcase name="cancelaloDespuesDePreguntar" classname="com.calendarremember.ConversacionTest" time="0.005"/>
+  <testcase name="unaNotaUnColorYUnAviso" classname="com.calendarremember.ConversacionTest" time="0.012"/>
+  <testcase name="unaCorreccion" classname="com.calendarremember.ConversacionTest" time="0.003"/>
+  <testcase name="siAlNoEncontrado" classname="com.calendarremember.ConversacionTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.calendarremember.GeneradoTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-18T22:33:15" hostname="runnervmlun5p" time="13.751">
+  <properties/>
+  <testcase name="milesDeFrasesGeneradas" classname="com.calendarremember.GeneradoTest" time="13.751"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.calendarremember.EjecutorTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-09-18T22:33:14" hostname="runnervmlun5p" time="0.089">
+  <properties/>
+  <testcase name="laCenaALasDiezSonLasDiezDeLaNoche" classname="com.calendarremember.EjecutorTest" time="0.002"/>
+  <testcase name="cadaDiaSuenaSoloASuHora" classname="com.calendarremember.EjecutorTest" time="0.012"/>
+  <testcase name="cadaMesSinArrastrarElDia" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="borraTodoLoDeUnDia" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="cancelarTodaLaSerie" classname="com.calendarremember.EjecutorTest" time="0.008"/>
+  <testcase name="cuandoEsAlgoQueSeRepite" classname="com.calendarremember.EjecutorTest" time="0.004"/>
+  <testcase name="loProximo" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="conEmpatePreguntaCual" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="sinNadaParecidoLoDiceYNoToca" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="diaVacio" classname="com.calendarremember.EjecutorTest" time="0.007"/>
+  <testcase name="hoySoloLoQueQueda" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="lasSeriesSeAlargan" classname="com.calendarremember.EjecutorTest" time="0.011"/>
+  <testcase name="agendaDeManana" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="apuntaUnaSerie" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="cambiaDeHoraConservandoElDia" classname="com.calendarremember.EjecutorTest" time="0.007"/>
+  <testcase name="apuntaYLoDice" classname="com.calendarremember.EjecutorTest" time="0.002"/>
+  <testcase name="cambiaDeDiaConservandoLaHora" classname="com.calendarremember.EjecutorTest" time="0.004"/>
+  <testcase name="cuandoEsAlgo" classname="com.calendarremember.EjecutorTest" time="0.003"/>
+  <testcase name="cancelarUnaDeLaSerieEsLaProxima" classname="com.calendarremember.EjecutorTest" time="0.004"/>
+  <testcase name="retrasaUnaHora" classname="com.calendarremember.EjecutorTest" time="0.001"/>
+  <testcase name="unoDeTodoElDiaPasaATenerHora" classname="com.calendarremember.EjecutorTest" time="0.005"/>
+  <testcase name="borraSinPreguntar" classname="com.calendarremember.EjecutorTest" time="0.002"/>
+  <testcase name="agendaDeLaSemana" classname="com.calendarremember.EjecutorTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
