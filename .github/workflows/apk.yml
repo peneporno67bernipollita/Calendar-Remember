@@ -1,9 +1,11 @@
 name: APK
 
-# Cada push a main compila la app y deja el APK listo para descargar.
+# Cada push a main compila la app y deja el APK listo para descargar. La rama
+# "pruebas" compila y prueba igual, pero no publica: sirve para comprobar un
+# cambio grande sin que la release pase por versiones a medias.
 on:
   push:
-    branches: [main]
+    branches: [main, pruebas]
   workflow_dispatch:
 
 permissions:
@@ -101,7 +103,7 @@ jobs:
 
       # Publica el APK en una release fija que siempre apunta a lo ultimo.
       - name: Publicar el APK
-        if: steps.construir.outcome == 'success'
+        if: steps.construir.outcome == 'success' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

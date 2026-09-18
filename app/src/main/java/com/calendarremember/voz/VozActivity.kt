@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.calendarremember.MainActivity
+import com.calendarremember.avisos.Notificaciones
 import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.Evento
 import com.calendarremember.ui.EstadoDictado
@@ -48,9 +49,11 @@ class VozActivity : ComponentActivity() {
         const val DESDE_PALABRA = "desde_palabra"
 
         /**
-         * Cuándo se abrió por última vez. El servicio lo mira para saber si
-         * la pantalla llegó a abrirse de verdad: MIUI a veces la bloquea sin
-         * avisar, y entonces el servicio atiende por su cuenta.
+         * Cuándo se vio por última vez en pantalla. El servicio lo mira para
+         * saber si llegó a abrirse de verdad: MIUI a veces la bloquea sin
+         * avisar (o la deja detrás del bloqueo), y entonces el servicio
+         * atiende por su cuenta. Por eso se marca al quedar a la vista y no
+         * al crearse.
          */
         @Volatile
         var abiertaEn = 0L
@@ -69,6 +72,8 @@ class VozActivity : ComponentActivity() {
     private var voz: TextToSpeech? = null
     private var vozLista = false
     private var desdePalabra = false
+    /** Empieza a escuchar la primera vez que queda a la vista, no antes. */
+    private var arrancada = false
 
     private val agenda by lazy { Almacen.comoAgenda(this) }
 
@@ -91,8 +96,24 @@ class VozActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        abiertaEn = SystemClock.elapsedRealtime()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) setShowWhenLocked(true)
+        desdePalabra = intent.getBooleanExtra(DESDE_PALABRA, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            // Al llamarla con el móvil bloqueado y la pantalla apagada, hay
+            // que encenderla: si no, el círculo escucharía a oscuras.
+            if (desdePalabra) setTurnScreenOn(true)
+        }
+        // El aviso que la ha abierto sobre el bloqueo ya no hace falta.
+        Notificaciones.quitarDictado(this)
+
+        // Un texto compartido desde otra app (un mensaje de WhatsApp): no hay
+        // nada que escuchar, se abre para apuntarlo.
+        if (intent.action == Intent.ACTION_SEND) {
+            val texto = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim()
+            if (!texto.isNullOrEmpty()) abrirBorrador(texto)
+            finish()
+            return
+        }
 
         // Si el servicio ya está atendiendo por su cuenta (esta pantalla llegó
         // tarde), no se estorba: los dos se pelearían por el micrófono.
@@ -102,10 +123,10 @@ class VozActivity : ComponentActivity() {
         }
 
         Almacen.cargar(this)
+
         // Mientras se dicta, el micrófono es para el dictado.
         EscuchaServicio.pausar(this)
 
-        desdePalabra = intent.getBooleanExtra(DESDE_PALABRA, false)
         voz = TextToSpeech(this) { resultado ->
             vozLista = resultado == TextToSpeech.SUCCESS
             if (vozLista) voz?.language = ES
@@ -123,12 +144,33 @@ class VozActivity : ComponentActivity() {
                 )
             }
         }
+    }
 
+    override fun onResume() {
+        super.onResume()
+        if (arrancada) return
+        arrancada = true
+        abiertaEn = SystemClock.elapsedRealtime()
+        if (EscuchaServicio.dictandoAhora) {
+            finish()
+            return
+        }
         when {
             !SpeechRecognizer.isRecognitionAvailable(this) -> dictadoConElSistema()
             tienePermisoMicro() -> principal.postDelayed({ escuchar() }, 250)
             else -> pedirMicro.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    /** Lo compartido se abre en el editor, ya relleno, para revisarlo y guardarlo. */
+    private fun abrirBorrador(texto: String) {
+        val borrador = Planes.borrador(texto)
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(MainActivity.BORRADOR, borrador.aJson().toString())
+            }
+        )
     }
 
     private fun tienePermisoMicro() = ContextCompat.checkSelfPermission(
@@ -284,7 +326,7 @@ class VozActivity : ComponentActivity() {
         principal.removeCallbacksAndMessages(null)
         runCatching { reconocedor?.destroy() }
         runCatching { voz?.shutdown() }
-        EscuchaServicio.reanudar(this)
+        if (intent?.action != Intent.ACTION_SEND) EscuchaServicio.reanudar(this)
         super.onDestroy()
     }
 }

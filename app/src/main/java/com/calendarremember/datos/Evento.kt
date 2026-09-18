@@ -3,6 +3,7 @@ package com.calendarremember.datos
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.UUID
@@ -32,7 +33,24 @@ data class Evento(
      */
     val serie: String? = null,
     val repeticion: com.calendarremember.voz.Repeticion = com.calendarremember.voz.Repeticion.NINGUNA,
+    /**
+     * El último día de un evento que dura varios ("viaje del 27 al 3"),
+     * incluido. Null en los de un solo día, que son casi todos. Los avisos
+     * cuentan desde el primer día; el calendario lo pinta en todos.
+     */
+    val hasta: LocalDate? = null,
 ) {
+    /** Dura más de un día. */
+    val variosDias: Boolean
+        get() = hasta != null && hasta.isAfter(inicio.toLocalDate())
+
+    val ultimoDia: LocalDate
+        get() = if (variosDias) hasta!! else inicio.toLocalDate()
+
+    /** Si el evento ocupa ese día: el suyo o cualquiera de su tramo. */
+    fun ocupa(dia: LocalDate): Boolean =
+        !dia.isBefore(inicio.toLocalDate()) && !dia.isAfter(ultimoDia)
+
     val inicioMillis: Long
         get() = inicio.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
@@ -64,6 +82,7 @@ data class Evento(
         put("creado", creado)
         put("serie", serie ?: JSONObject.NULL)
         put("repeticion", repeticion.name)
+        put("hasta", if (variosDias) hasta.toString() else JSONObject.NULL)
     }
 
     companion object {
@@ -92,6 +111,8 @@ data class Evento(
                 repeticion = runCatching {
                     com.calendarremember.voz.Repeticion.valueOf(o.optString("repeticion"))
                 }.getOrDefault(com.calendarremember.voz.Repeticion.NINGUNA),
+                hasta = o.optString("hasta").takeIf { it.isNotBlank() && it != "null" }
+                    ?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
             )
         }
     }

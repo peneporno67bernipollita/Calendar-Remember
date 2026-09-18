@@ -14,6 +14,7 @@ import com.calendarremember.MainActivity
 import com.calendarremember.R
 import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.ColorEvento
+import com.calendarremember.datos.Etiquetas
 import com.calendarremember.datos.Evento
 import com.calendarremember.datos.Preferencias
 import com.calendarremember.voz.EscuchaServicio
@@ -46,6 +47,8 @@ object Notificaciones {
     private const val ID_REACTIVAR = 7003
 
     const val ACCION_DESCARTAR = "com.calendarremember.DESCARTAR"
+    const val ACCION_APUNTAR_PLAN = "com.calendarremember.APUNTAR_PLAN"
+    private const val CANAL_PLANES = "planes"
 
     private val FMT_HORA = DateTimeFormatter.ofPattern("HH:mm")
     private val ES = Locale("es", "ES")
@@ -87,6 +90,16 @@ object Notificaciones {
                 setSound(null, null)
                 enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+        )
+
+        // Los planes que llegan por WhatsApp: se ven y suenan como un
+        // mensaje más, sin saltar encima de nada.
+        gestor.createNotificationChannel(
+            NotificationChannel(
+                CANAL_PLANES, "Planes de WhatsApp", NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "Cuando te proponen un plan con día u hora, para apuntarlo de un toque."
             }
         )
 
@@ -229,7 +242,8 @@ object Notificaciones {
 
         // Cuando empiece el próximo evento, esta lista ya estará desfasada:
         // se deja programado el siguiente repintado.
-        Programador.programarRefresco(contexto, proximos().firstOrNull { !it.todoElDia })
+        val ahora = LocalDateTime.now()
+        Programador.programarRefresco(contexto, proximos().firstOrNull { !it.todoElDia && it.inicio.isAfter(ahora) })
     }
 
     /** Lo que aún no ha pasado, en orden: lo que enseña la agenda. */
@@ -237,8 +251,12 @@ object Notificaciones {
         val ahora = LocalDateTime.now()
         val hoy = LocalDate.now()
         return Almacen.eventos.value.filter {
-            if (it.todoElDia) !it.inicio.toLocalDate().isBefore(hoy)
-            else it.inicio.isAfter(ahora)
+            when {
+                // Un viaje sigue a la vista mientras dura: "Hasta dom 25".
+                it.variosDias -> !it.ultimoDia.isBefore(hoy)
+                it.todoElDia -> !it.inicio.toLocalDate().isBefore(hoy)
+                else -> it.inicio.isAfter(ahora)
+            }
         }.take(4)
     }
 
@@ -359,6 +377,102 @@ object Notificaciones {
     }
 
     /**
+     * Un plan de WhatsApp: "¿Lo apunto?", con el mensaje entero y dos
+     * botones. "Apuntar" lo guarda sin abrir nada; tocar el aviso (o
+     * "Cambiar") lo abre en el editor, ya relleno, por si hay que retocarlo.
+     */
+    fun ofrecerPlan(contexto: Context, plan: Evento) {
+        val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
+        crearCanales(contexto)
+        val id = plan.id.hashCode()
+        val json = plan.aJson().toString()
+
+        val apuntar = PendingIntent.getBroadcast(
+            contexto, id,
+            Intent(contexto, ReceptorAviso::class.java).apply {
+                action = ACCION_APUNTAR_PLAN
+                putExtra("plan", json)
+                data = Uri.parse("calendarremember://plan/${plan.id}")
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val editar = PendingIntent.getActivity(
+            contexto, id,
+            Intent(contexto, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(MainActivity.BORRADOR, json)
+                data = Uri.parse("calendarremember://editar/${plan.id}")
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val cuando = Etiquetas.corta(plan, LocalDate.now())
+        val notificacion = NotificationCompat.Builder(contexto, CANAL_PLANES)
+            .setSmallIcon(R.drawable.ic_aviso)
+            .setContentTitle("¿Lo apunto? ${plan.titulo}")
+            .setContentText(cuando)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$cuando\n${plan.notas.orEmpty()}"))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setAutoCancel(true)
+            .setContentIntent(editar)
+            .addAction(0, "Apuntar", apuntar)
+            .addAction(0, "Cambiar", editar)
+            .build()
+        gestor.notify(id, notificacion)
+    }
+
+    /** Tras "Apuntar": lo confirma en el mismo sitio y se quita solo. */
+    fun planApuntado(contexto: Context, plan: Evento) {
+        val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
+        val notificacion = NotificationCompat.Builder(contexto, CANAL_PLANES)
+            .setSmallIcon(R.drawable.ic_aviso)
+            .setContentTitle("Apuntado: ${plan.titulo}")
+            .setContentText(Etiquetas.corta(plan, LocalDate.now()))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .setTimeoutAfter(5_000)
+            .setContentIntent(abrirApp(contexto, plan.id))
+            .build()
+        gestor.notify(plan.id.hashCode(), notificacion)
+    }
+
+    /**
+     * Abre el círculo del dictado encima de la pantalla de bloqueo. Es un
+     * aviso de pantalla completa, como una llamada: con el móvil bloqueado,
+     * el sistema no lo deja en la barra sino que abre directamente la
+     * pantalla que lleva dentro, y enciende la pantalla si estaba apagada.
+     * La pantalla del dictado lo quita en cuanto se abre.
+     */
+    fun mostrarLlamadaDictado(contexto: Context) {
+        val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
+        val abrir = PendingIntent.getActivity(
+            contexto, "dictado-bloqueo".hashCode(),
+            Intent(contexto, VozActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(VozActivity.DESDE_PALABRA, true)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notificacion = NotificationCompat.Builder(contexto, CANAL_DICTADO)
+            .setSmallIcon(R.drawable.ic_mic)
+            .setContentTitle("Nébula te escucha")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setFullScreenIntent(abrir, true)
+            .setContentIntent(abrir)
+            .setAutoCancel(true)
+            .setTimeoutAfter(15_000)
+            .build()
+        gestor.notify(ID_DICTADO, notificacion)
+    }
+
+    fun quitarDictado(contexto: Context) {
+        contexto.getSystemService(NotificationManager::class.java)?.cancel(ID_DICTADO)
+    }
+
+    /**
      * Tras reiniciar el móvil, Android no deja que el servicio vuelva a abrir
      * el micrófono solo: tiene que arrancarlo el usuario. Un toque aquí basta.
      */
@@ -381,18 +495,8 @@ object Notificaciones {
         gestor.notify(ID_REACTIVAR, notificacion)
     }
 
-    /** "Hoy 17:30", "Mañana", "Vie 20 09:00". */
-    private fun etiquetaCuando(evento: Evento, hoy: LocalDate): String {
-        val dia = evento.inicio.toLocalDate()
-        val cuando = when (dia) {
-            hoy -> "Hoy"
-            hoy.plusDays(1) -> "Mañana"
-            else -> dia.format(DateTimeFormatter.ofPattern("EEE d", ES))
-                .replace(".", "")
-                .replaceFirstChar { it.uppercase(ES) }
-        }
-        return if (evento.todoElDia) cuando else "$cuando ${evento.inicio.format(FMT_HORA)}"
-    }
+    /** "Hoy 17:30", "Mañana", "Vie 20 09:00", "Hasta dom 25". */
+    private fun etiquetaCuando(evento: Evento, hoy: LocalDate): String = Etiquetas.corta(evento, hoy)
 
     private fun colorDe(evento: Evento): Int = when (evento.color) {
         ColorEvento.CIAN -> 0xFF00E5FF.toInt()

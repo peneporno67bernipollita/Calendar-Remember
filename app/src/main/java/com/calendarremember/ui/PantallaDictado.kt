@@ -58,9 +58,8 @@ sealed interface EstadoDictado {
 }
 
 /**
- * La pantalla del dictado. Va sobre lo que hubiera detrás —el escritorio o
- * la pantalla de bloqueo— con un velo oscuro, y enseña en grande lo que va
- * entendiendo mientras se habla: si algo se entiende mal, se ve al momento.
+ * La pantalla del dictado, sobre la nebulosa: enseña en grande lo que va
+ * entendiendo mientras se habla, y si algo se entiende mal se ve al momento.
  */
 @Composable
 fun PantallaDictado(
@@ -72,7 +71,6 @@ fun PantallaDictado(
     Box(
         Modifier
             .fillMaxSize()
-            .background(Neon.Fondo.copy(alpha = 0.94f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -80,6 +78,9 @@ fun PantallaDictado(
             ),
         contentAlignment = Alignment.Center,
     ) {
+        // La misma nebulosa de la app, algo más apagada: aquí lo que importa
+        // es el círculo y lo que se va entendiendo.
+        FondoNebula(intensidad = 0.8f)
         Column(
             Modifier.padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -174,7 +175,8 @@ private fun Pulso(color: Color, nivel: Float, contenido: @Composable () -> Unit)
             .size(118.dp)
             .scale(latido + nivel.coerceIn(0f, 1f) * 0.12f)
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.08f))
+            .background(Neon.Fondo.copy(alpha = 0.6f))
+            .background(color.copy(alpha = 0.10f))
             .border(2.dp, color, CircleShape),
         contentAlignment = Alignment.Center,
     ) { contenido() }
@@ -189,7 +191,7 @@ private fun FichaElegir(evento: Evento, boton: String, alPulsar: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Neon.SuperficieAlta)
+            .background(Neon.SuperficieAlta.copy(alpha = 0.85f))
             .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
             .clickable(onClick = alPulsar)
             .padding(14.dp),
@@ -211,6 +213,10 @@ private fun FichaElegir(evento: Evento, boton: String, alPulsar: () -> Unit) {
                     if (!evento.todoElDia) {
                         append(" · ")
                         append(evento.inicio.format(DateTimeFormatter.ofPattern("HH:mm")))
+                    }
+                    if (evento.variosDias) {
+                        append(" · hasta el ")
+                        append(evento.ultimoDia.format(DateTimeFormatter.ofPattern("d 'de' MMMM", ES)))
                     }
                 },
                 color = Neon.Tenue,

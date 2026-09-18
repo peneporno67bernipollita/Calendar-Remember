@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /**
@@ -92,6 +93,7 @@ object Ejecutor {
                 else leido.avisos,
             duracionMin = leido.duracionMin,
             dictado = leido.dictado,
+            hasta = leido.hasta,
         )
 
         if (repite) {
@@ -192,8 +194,11 @@ object Ejecutor {
      * a tener hora, con los avisos de un evento con hora.
      */
     private fun mover(leido: Interpretacion, evento: Evento, agenda: Agenda, ahora: LocalDateTime): Respuesta {
+        // Alargar o acortar: cambia dónde acaba, no dónde empieza.
+        if (leido.nuevoHasta != null || leido.alargarMin != null) return alargar(leido, evento, agenda, ahora)
+
         val desplazamiento = leido.desplazamientoMin
-        val nuevo = if (desplazamiento != null) {
+        val movido = if (desplazamiento != null) {
             if (evento.todoElDia && desplazamiento % 1440 != 0L) {
                 return Respuesta.Hecha(
                     "${evento.titulo} es de todo el día: dime a qué hora lo pongo.", false,
@@ -208,6 +213,42 @@ object Ejecutor {
                 todoElDia = hora == null,
                 avisos = if (evento.todoElDia && hora != null) listOf(1440, 60, 0) else evento.avisos,
             )
+        }
+        // Lo que dura varios días se mueve entero: el viaje del 27 al 3
+        // pasado al 28 acaba el 4.
+        val dias = ChronoUnit.DAYS.between(evento.inicio.toLocalDate(), movido.inicio.toLocalDate())
+        val nuevo = if (evento.variosDias) movido.copy(hasta = evento.hasta!!.plusDays(dias)) else movido
+        agenda.guardar(nuevo)
+        return Respuesta.Hecha("Cambiado: ${nuevo.titulo}, ahora ${cuando(nuevo, ahora)}.", true)
+    }
+
+    private fun alargar(leido: Interpretacion, evento: Evento, agenda: Agenda, ahora: LocalDateTime): Respuesta {
+        val inicio = evento.inicio.toLocalDate()
+        val minutos = leido.alargarMin
+        val hastaDicho = leido.nuevoHasta
+        val nuevo = when {
+            hastaDicho != null -> {
+                if (hastaDicho.isBefore(inicio)) {
+                    return Respuesta.Hecha("${evento.titulo} empieza ${cuando(evento, ahora)}: no puede acabar antes.", false)
+                }
+                evento.copy(hasta = hastaDicho.takeIf { it.isAfter(inicio) })
+            }
+            // Días enteros: se mueve el último día.
+            minutos != null && minutos % 1440 == 0L -> {
+                val hasta = evento.ultimoDia.plusDays(minutos / 1440)
+                evento.copy(hasta = if (hasta.isAfter(inicio)) hasta else null)
+            }
+            minutos != null -> {
+                if (evento.todoElDia) {
+                    return Respuesta.Hecha("${evento.titulo} es de todo el día: no tiene hora de acabar.", false)
+                }
+                val dura = ((evento.duracionMin ?: 60) + minutos).coerceAtLeast(5)
+                val alargado = evento.copy(duracionMin = dura.toInt())
+                agenda.guardar(alargado)
+                val fin = alargado.inicio.plusMinutes(dura)
+                return Respuesta.Hecha("Cambiado: ${alargado.titulo}, ahora hasta las ${fin.format(HORA)}.", true)
+            }
+            else -> evento
         }
         agenda.guardar(nuevo)
         return Respuesta.Hecha("Cambiado: ${nuevo.titulo}, ahora ${cuando(nuevo, ahora)}.", true)
@@ -255,11 +296,16 @@ object Ejecutor {
             else -> {
                 val desde = leido.desde ?: ahora.toLocalDate()
                 val hasta = leido.hasta ?: desde
+                // Lo que toca alguno de esos días, aunque empiece antes: el
+                // viaje que empezó ayer también es de hoy.
                 val enRango = agenda.eventos
-                    .filter { !it.inicio.toLocalDate().isBefore(desde) && !it.inicio.toLocalDate().isAfter(hasta) }
+                    .filter { !it.inicio.toLocalDate().isAfter(hasta) && !it.ultimoDia.isBefore(desde) }
                     // Hoy solo cuenta lo que aún no ha pasado: lo de esta
                     // mañana ya no es "lo que tengo".
-                    .filter { it.todoElDia || it.inicio.toLocalDate() != ahora.toLocalDate() || it.inicio.isAfter(ahora) }
+                    .filter {
+                        it.todoElDia || it.variosDias || it.inicio.toLocalDate() != ahora.toLocalDate() ||
+                            it.inicio.isAfter(ahora)
+                    }
                     .sortedBy { it.inicio }
                 val unDia = desde == hasta
                 val cuandoRango = if (unDia) etiquetaDia(desde, ahora) else etiquetaRango(desde, hasta, ahora)
@@ -271,10 +317,20 @@ object Ejecutor {
                     return Respuesta.Hecha("$cuandoRango no tienes nada.$despues", true)
                 }
                 val lista = enRango.take(6).joinToString("; ") { e ->
-                    val momento = if (unDia) {
-                        if (e.todoElDia) "todo el día" else "a las ${e.inicio.format(HORA)}"
-                    } else cuando(e, ahora)
-                    "$momento, ${e.titulo}"
+                    if (unDia && e.variosDias) {
+                        // En un día suelto, de lo que dura varios basta con
+                        // decir hasta cuándo sigue.
+                        val empieza = e.inicio.toLocalDate() == desde
+                        val momento = if (empieza && !e.todoElDia) "a las ${e.inicio.format(HORA)}" else "todo el día"
+                        val sigue = if (e.ultimoDia == desde) "último día"
+                            else "hasta " + etiquetaDia(e.ultimoDia, ahora).replaceFirstChar { it.lowercase() }
+                        "$momento, ${e.titulo}, $sigue"
+                    } else {
+                        val momento = if (unDia) {
+                            if (e.todoElDia) "todo el día" else "a las ${e.inicio.format(HORA)}"
+                        } else cuando(e, ahora)
+                        "$momento, ${e.titulo}"
+                    }
                 }
                 val resto = if (enRango.size > 6) "; y ${enRango.size - 6} más" else ""
                 Respuesta.Hecha("$cuandoRango tienes ${cuantos(enRango.size)}: $lista$resto.", true)
@@ -302,10 +358,36 @@ object Ejecutor {
         leido,
     )
 
-    /** "hoy a las 17:30", "mañana", "el sábado 19 a las 21:00", "el martes 3 de noviembre". */
+    /**
+     * "hoy a las 17:30", "mañana", "el sábado 19 a las 21:00", "el martes 3
+     * de noviembre", y lo que dura varios días: "del domingo 27 de septiembre
+     * al domingo 25 de octubre", "desde mañana hasta el domingo 20".
+     */
     fun cuando(evento: Evento, ahora: LocalDateTime): String {
+        val hora = if (evento.todoElDia) "" else " a las ${evento.inicio.format(HORA)}"
+        if (evento.variosDias) return tramo(evento.inicio.toLocalDate(), evento.ultimoDia, ahora, hora)
         val dia = etiquetaDia(evento.inicio.toLocalDate(), ahora).replaceFirstChar { it.lowercase() }
-        return if (evento.todoElDia) dia else "$dia a las ${evento.inicio.format(HORA)}"
+        return "$dia$hora"
+    }
+
+    private fun tramo(primero: LocalDate, ultimo: LocalDate, ahora: LocalDateTime, hora: String): String {
+        val hoy = ahora.toLocalDate()
+        // El mes, cuando hace falta: si queda lejos o ya pasó.
+        val lejos = ultimo.isAfter(hoy.plusDays(6)) || primero.isBefore(hoy)
+        val conMes = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", ES)
+        val sinMes = DateTimeFormatter.ofPattern("EEEE d", ES)
+        val fin = ultimo.format(if (lejos) conMes else sinMes)
+        return when (primero) {
+            hoy -> "desde hoy$hora hasta el $fin"
+            hoy.plusDays(1) -> "desde mañana$hora hasta el $fin"
+            else -> {
+                // "del domingo 27 al martes 29 de septiembre": el mes una
+                // vez, salvo que las puntas caigan en meses distintos.
+                val mismoMes = primero.month == ultimo.month && primero.year == ultimo.year
+                val ini = primero.format(if (lejos && !mismoMes) conMes else sinMes)
+                "del $ini$hora al $fin"
+            }
+        }
     }
 
     /** "Hoy", "Mañana", "El viernes 18", "El martes 3 de noviembre". */

@@ -15,6 +15,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -31,23 +33,31 @@ import androidx.compose.ui.window.Dialog
  *
  * Android (y más aún MIUI) no deja escuchar en segundo plano sin varios
  * permisos que solo se dan a mano. Cada paso dice si ya está y lleva directo
- * al ajuste que toca. Los de Xiaomi no se pueden comprobar desde la app, así
- * que no llevan marca: solo el botón para ir a ellos.
+ * al ajuste que toca. Los de Xiaomi se leen cuando MIUI deja; si no, llevan
+ * solo el botón para ir a ellos.
  */
 @Composable
 fun DialogoEscucha(
     activa: Boolean,
+    /** Escuchar también con la pantalla apagada. */
+    apagada: Boolean,
     micro: Boolean,
     sobreApps: Boolean,
     bateria: Boolean,
+    esXiaomi: Boolean,
+    /** Los permisos de MIUI: null si no se pueden leer. */
+    ventanasXiaomi: Boolean?,
+    bloqueoXiaomi: Boolean?,
     /** La última vez, el sistema no dejó abrir el círculo al oír la palabra. */
     aperturaBloqueada: Boolean,
+    aperturaBloqueadaEnBloqueo: Boolean,
     alPedirMicro: () -> Unit,
     alPedirSobreApps: () -> Unit,
     alPedirBateria: () -> Unit,
     alAbrirInicioXiaomi: () -> Unit,
     alAbrirPermisosXiaomi: () -> Unit,
     alCambiar: (Boolean) -> Unit,
+    alCambiarApagada: (Boolean) -> Unit,
     alCerrar: () -> Unit,
 ) {
     Dialog(onDismissRequest = alCerrar) {
@@ -58,27 +68,35 @@ fun DialogoEscucha(
         ) {
             Column(
                 Modifier
-                    .padding(18.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text("Escuchar «Nébula»", color = Neon.Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Con la pantalla encendida, di «Nébula» y se abre el dictado. " +
-                        "Con la pantalla apagada no escucha nada.",
+                    "Di «Nébula» y se abre el dictado: en el escritorio, dentro de otra app o " +
+                        "con el móvil bloqueado.",
                     color = Neon.Tenue, fontSize = 13.sp,
                 )
 
                 // Sin el círculo, la palabra funciona igual: suena un pitido y
                 // se contesta en voz alta. Pero hay que decir por qué no sale.
-                if (activa && (aperturaBloqueada || !sobreApps)) {
+                val aviso = when {
+                    !activa -> null
+                    !sobreApps ->
+                        "Ahora mismo, al oírte suena un pitido y te contesto en voz alta, " +
+                            "pero sin el círculo en pantalla. Para verlo, activa «Mostrar sobre otras apps»."
+                    aperturaBloqueadaEnBloqueo && bloqueoXiaomi != true ->
+                        "Con el móvil bloqueado, la última vez no pude abrir el círculo y te contesté solo " +
+                            "en voz. Falta «Mostrar en pantalla de bloqueo» (en «Otros permisos» de Xiaomi)."
+                    aperturaBloqueada && ventanasXiaomi != true ->
+                        "La última vez el móvil no dejó abrir el círculo y te contesté solo en voz. " +
+                            "En Xiaomi falta «Mostrar ventanas emergentes en segundo plano» (en «Otros permisos»)."
+                    else -> null
+                }
+                aviso?.let {
                     Text(
-                        text = if (!sobreApps)
-                            "Ahora mismo, al oírte suena un pitido y te contesto en voz alta, " +
-                                "pero sin el círculo en pantalla. Para verlo, activa «Mostrar sobre otras apps»."
-                        else
-                            "La última vez el móvil no dejó abrir el círculo y te contesté solo en voz. " +
-                                "En Xiaomi falta «Mostrar ventanas emergentes en segundo plano» (en «Otros permisos»).",
+                        text = it,
                         color = Neon.Ambar,
                         fontSize = 13.sp,
                         modifier = Modifier
@@ -101,16 +119,59 @@ fun DialogoEscucha(
                     "Para que el ahorro de energía no la apague.",
                     bateria, alPedirBateria,
                 )
-                Paso(
-                    "Xiaomi: inicio automático",
-                    "Actívalo para Nébula. Sin esto, MIUI la cierra al rato.",
-                    null, alAbrirInicioXiaomi,
-                )
-                Paso(
-                    "Xiaomi: otros permisos",
-                    "Activa «Mostrar ventanas emergentes en segundo plano» y «Mostrar en pantalla de bloqueo».",
-                    null, alAbrirPermisosXiaomi,
-                )
+                if (esXiaomi) {
+                    Paso(
+                        "Xiaomi: inicio automático",
+                        "Actívalo para Nébula. Sin esto, MIUI la cierra al rato.",
+                        null, alAbrirInicioXiaomi,
+                    )
+                    Paso(
+                        "Xiaomi: ventanas en segundo plano",
+                        "En «Otros permisos»: «Mostrar ventanas emergentes en segundo plano». " +
+                            "Para abrir el círculo desde otras apps.",
+                        ventanasXiaomi, alAbrirPermisosXiaomi,
+                    )
+                    Paso(
+                        "Xiaomi: pantalla de bloqueo",
+                        "En «Otros permisos»: «Mostrar en pantalla de bloqueo». " +
+                            "Para abrir el círculo con el móvil bloqueado.",
+                        bloqueoXiaomi, alAbrirPermisosXiaomi,
+                    )
+                }
+
+                // Con la pantalla apagada: como los asistentes de fábrica, pero
+                // con su precio en batería, que es lo que hay que saber.
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Neon.SuperficieAlta)
+                        .border(1.dp, Neon.Borde, RoundedCornerShape(12.dp))
+                        .clickable { alCambiarApagada(!apagada) }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("También con la pantalla apagada", color = Neon.Texto, fontSize = 14.sp)
+                        Text(
+                            "Como «Oye Siri»: le hablas sin tocar el móvil y se enciende. Gasta más " +
+                                "batería. Si está en un bolsillo, contesta solo con la voz.",
+                            color = Neon.Tenue, fontSize = 12.sp,
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Switch(
+                        checked = apagada,
+                        onCheckedChange = alCambiarApagada,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Neon.Fondo,
+                            checkedTrackColor = Neon.Cian,
+                            uncheckedThumbColor = Neon.Tenue,
+                            uncheckedTrackColor = Neon.Superficie,
+                            uncheckedBorderColor = Neon.Borde,
+                        ),
+                    )
+                }
 
                 Spacer(Modifier.width(4.dp))
 

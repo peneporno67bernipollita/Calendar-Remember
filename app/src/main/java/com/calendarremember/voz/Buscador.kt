@@ -58,7 +58,11 @@ object Buscador {
             // Por fecha. Un día de margen cubre el "finde", que se resuelve al
             // sábado pero puede ser el domingo.
             if (fecha != null) {
-                val dias = abs(ChronoUnit.DAYS.between(fecha, evento.inicio.toLocalDate()))
+                // Lo que dura varios días encaja en cualquiera de ellos.
+                val dias = if (evento.ocupa(fecha)) 0L else minOf(
+                    abs(ChronoUnit.DAYS.between(fecha, evento.inicio.toLocalDate())),
+                    abs(ChronoUnit.DAYS.between(fecha, evento.ultimoDia)),
+                )
                 puntos += when {
                     dias == 0L -> 4
                     dias == 1L -> 3
@@ -78,7 +82,9 @@ object Buscador {
             }
 
             // Lo que ya pasó rara vez es lo que se quiere cancelar.
-            if (evento.inicio.isBefore(ahora)) puntos -= 2
+            val pasado = if (evento.variosDias) evento.ultimoDia.isBefore(ahora.toLocalDate())
+                else evento.inicio.isBefore(ahora)
+            if (pasado) puntos -= 2
 
             if (puntos > 0) Candidato(evento, puntos) else null
         }.sortedByDescending { it.puntos }

@@ -62,7 +62,10 @@ object Series {
             .map { n -> enesima(primera.inicio, r, n) }
             .takeWhile { !it.toLocalDate().isAfter(hasta) }
             .map { inicio ->
-                primera.copy(id = UUID.randomUUID().toString(), inicio = inicio, serie = serie, repeticion = r)
+                primera.copy(
+                    id = UUID.randomUUID().toString(), inicio = inicio, serie = serie, repeticion = r,
+                    hasta = desplazado(primera, inicio),
+                )
             }
             .toList()
     }
@@ -86,9 +89,18 @@ object Series {
                     .map { n -> enesima(base.inicio, r, n) }
                     .dropWhile { !it.isAfter(ultima) }
                     .takeWhile { !it.toLocalDate().isAfter(hasta) }
-                    .map { inicio -> base.copy(id = UUID.randomUUID().toString(), inicio = inicio) }
+                    .map { inicio ->
+                        base.copy(id = UUID.randomUUID().toString(), inicio = inicio, hasta = desplazado(base, inicio))
+                    }
                     .toList()
             }
+
+    /** El último día de una repetición que dura varios, movido con ella. */
+    private fun desplazado(modelo: Evento, inicio: LocalDateTime): java.time.LocalDate? =
+        if (!modelo.variosDias) null
+        else modelo.hasta!!.plusDays(
+            java.time.temporal.ChronoUnit.DAYS.between(modelo.inicio.toLocalDate(), inicio.toLocalDate())
+        )
 
     /** "todos los martes a las 19:00", "cada día a las 09:00", "todos los años el 3 de mayo". */
     fun describir(primera: Evento, r: Repeticion): String {

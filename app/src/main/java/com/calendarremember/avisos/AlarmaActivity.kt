@@ -27,7 +27,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.Evento
+import com.calendarremember.ui.FondoNebula
 import com.calendarremember.ui.Neon
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import com.calendarremember.ui.TemaNebula
 import java.time.format.DateTimeFormatter
 
@@ -95,51 +99,70 @@ private fun PantallaAlarma(
     alDescartar: () -> Unit,
     alPosponer: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier.fillMaxSize().padding(28.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+    Box(Modifier.fillMaxSize()) {
+        FondoNebula(intensidad = 0.8f)
+        Box(
+            modifier = Modifier.fillMaxSize().padding(28.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = evento?.inicio?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "",
-                fontSize = 56.sp,
-                fontWeight = FontWeight.Light,
-                color = Neon.Cian,
-            )
-            Text(
-                text = evento?.titulo ?: "Evento",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Neon.Texto,
-                textAlign = TextAlign.Center,
-            )
-            evento?.notas?.let {
-                Text(text = it, fontSize = 15.sp, color = Neon.Tenue, textAlign = TextAlign.Center)
-            }
-
-            Box(Modifier.size(24.dp))
-
-            Button(
-                onClick = alDescartar,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Neon.Cian.copy(alpha = 0.16f),
-                    contentColor = Neon.Cian,
-                ),
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                Text("Hecho", fontSize = 17.sp, modifier = Modifier.padding(vertical = 6.dp))
-            }
+                Text(
+                    // Uno de todo el día no tiene hora que enseñar: "Hoy".
+                    text = when {
+                        evento == null -> ""
+                        evento.todoElDia -> "Hoy"
+                        else -> evento.inicio.format(DateTimeFormatter.ofPattern("HH:mm"))
+                    },
+                    style = TextStyle(
+                        fontSize = 56.sp,
+                        fontWeight = FontWeight.Light,
+                        color = Neon.Cian,
+                        shadow = Shadow(Neon.Cian, Offset.Zero, 32f),
+                    ),
+                )
+                Text(
+                    text = evento?.titulo ?: "Evento",
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Neon.Texto,
+                    textAlign = TextAlign.Center,
+                )
+                if (evento != null && evento.variosDias) {
+                    Text(
+                        text = "Hasta el " + evento.ultimoDia.format(
+                            DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", java.util.Locale("es", "ES"))
+                        ),
+                        fontSize = 16.sp, color = Neon.Texto.copy(alpha = 0.8f), textAlign = TextAlign.Center,
+                    )
+                }
+                evento?.notas?.let {
+                    Text(text = it, fontSize = 15.sp, color = Neon.Tenue, textAlign = TextAlign.Center)
+                }
 
-            OutlinedButton(
-                onClick = alPosponer,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-            ) {
-                Text("Posponer 10 minutos", color = Color(0xFF7C869C))
+                Box(Modifier.size(24.dp))
+
+                Button(
+                    onClick = alDescartar,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Neon.Cian.copy(alpha = 0.16f),
+                        contentColor = Neon.Cian,
+                    ),
+                ) {
+                    Text("Hecho", fontSize = 17.sp, modifier = Modifier.padding(vertical = 6.dp))
+                }
+
+                OutlinedButton(
+                    onClick = alPosponer,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Text("Posponer 10 minutos", color = Color(0xFF7C869C))
+                }
             }
         }
     }

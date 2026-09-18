@@ -8,6 +8,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.app.KeyguardManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -37,9 +42,10 @@ import java.util.concurrent.Executors
 /**
  * Escucha "Nébula" y, al oírla, atiende lo que se diga a continuación.
  *
- * Solo tiene el micrófono abierto con la pantalla encendida: así cumple lo
- * que se le pide (encender el móvil y hablarle) sin estar oyendo toda la
- * noche en el bolsillo.
+ * Escucha con la pantalla encendida, en el escritorio y en la pantalla de
+ * bloqueo; con la pantalla apagada, solo si se activa en los ajustes, porque
+ * mantiene el procesador despierto. Apagada, además, el reconocedor no
+ * recibe el silencio: solo el audio con algo de voz, que es lo que gasta.
  *
  * Cómo distingue "Nébula" de todo lo demás está medido, no supuesto. El
  * modelo no conoce la palabra, pero se le da a elegir entre "nebulosa" (que
@@ -57,6 +63,7 @@ class EscuchaServicio : Service() {
         private const val ACCION_PAUSAR = "com.calendarremember.escucha.PAUSAR"
         private const val ACCION_REANUDAR = "com.calendarremember.escucha.REANUDAR"
         private const val ACCION_PARAR = "com.calendarremember.escucha.PARAR"
+        private const val ACCION_AJUSTES = "com.calendarremember.escucha.AJUSTES"
 
         private const val FRECUENCIA = 16_000
         /** Un cuarto de segundo, como en las mediciones. */
@@ -68,6 +75,19 @@ class EscuchaServicio : Service() {
         private const val PAUSA_ENTRE_ACTIVACIONES_MS = 3_000L
         /** Cuánto se espera a que se abra la pantalla del dictado. */
         private const val ESPERA_PANTALLA_MS = 1_500L
+        /** Sobre el bloqueo hay que encender la pantalla antes: más margen. */
+        private const val ESPERA_BLOQUEO_MS = 3_000L
+
+        /**
+         * La puerta de la pantalla apagada: por debajo de esto (o de 1,6
+         * veces el ruido de fondo) un trozo es silencio. Con más de un
+         * segundo seguido de silencio, el reconocedor deja de recibir audio
+         * hasta que vuelva a haber voz. Medido sobre las mismas
+         * conversaciones: detecta lo mismo, y el reconocedor se ahorra todo
+         * el silencio.
+         */
+        private const val VOZ_MINIMA = 100.0
+        private const val TROZOS_DE_SILENCIO = 4
         /**
          * Si el dictado no llega a devolver el micrófono (se cierra de golpe,
          * el sistema lo mata...), la escucha vuelve sola pasado este tiempo.
@@ -123,6 +143,11 @@ class EscuchaServicio : Service() {
             if (enMarcha) enviar(contexto, ACCION_REANUDAR)
         }
 
+        /** Han cambiado los ajustes (escuchar con la pantalla apagada). */
+        fun releerAjustes(contexto: Context) {
+            if (enMarcha) enviar(contexto, ACCION_AJUSTES)
+        }
+
         private fun enviar(contexto: Context, accion: String) {
             runCatching {
                 contexto.startService(
@@ -143,8 +168,11 @@ class EscuchaServicio : Service() {
     private var pausado = false
     /** Atendiendo una orden desde aquí mismo, sin pantalla. */
     private var dictando = false
-    private var pantallaEncendida = true
+    /** La lee también el hilo de la captura: decide si hay puerta de silencio. */
+    @Volatile private var pantallaEncendida = true
     private var ultimaActivacion = 0L
+    /** Con la pantalla apagada, el procesador no puede dormirse mientras escucha. */
+    private var despierto: PowerManager.WakeLock? = null
 
     private var voz: TextToSpeech? = null
     private var vozLista = false
@@ -228,6 +256,7 @@ class EscuchaServicio : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACCION_AJUSTES -> actualizar()
         }
         // Si el sistema lo mata por falta de memoria, que lo vuelva a levantar.
         return START_STICKY
@@ -235,10 +264,23 @@ class EscuchaServicio : Service() {
 
     /** Abre o suelta el micrófono según toque. */
     private fun actualizar() {
-        val debe = modelo != null && pantallaEncendida && !pausado && !dictando
+        val oye = pantallaEncendida || Preferencias.escucharApagada(this)
+        val debe = modelo != null && oye && !pausado && !dictando
         val vivo = captura?.isAlive == true
         if (debe && !vivo) empezar()
         if (!debe && vivo) soltar()
+        mantenerDespierto(debe && !pantallaEncendida)
+    }
+
+    private fun mantenerDespierto(si: Boolean) {
+        val candado = despierto ?: getSystemService(PowerManager::class.java)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "nebula:escucha")
+            ?.also {
+                it.setReferenceCounted(false)
+                despierto = it
+            } ?: return
+        if (si && !candado.isHeld) candado.acquire()
+        if (!si && candado.isHeld) candado.release()
     }
 
     private fun empezar() {
@@ -270,6 +312,16 @@ class EscuchaServicio : Service() {
         }.getOrNull()
     }
 
+    /** El volumen de un trozo: la raíz de la media de los cuadrados. */
+    private fun energia(trozo: ShortArray, n: Int): Double {
+        var suma = 0.0
+        for (i in 0 until n) {
+            val v = trozo[i].toDouble()
+            suma += v * v
+        }
+        return kotlin.math.sqrt(suma / maxOf(1, n))
+    }
+
     // --- Oír la palabra (en su propio hilo) --------------------------------
 
     private fun buscarLaPalabra(m: Model) {
@@ -284,15 +336,49 @@ class EscuchaServicio : Service() {
         // Todo dentro del try: un error sin recoger en un hilo propio cierra la
         // app entera, no solo la escucha.
         var reconocedor: Recognizer? = null
-        val trozo = ShortArray(MUESTRAS_TROZO)
+        var trozo = ShortArray(MUESTRAS_TROZO)
+        // El trozo anterior, para no perder el principio de la palabra al
+        // abrir la puerta de silencio.
+        var previo = ShortArray(MUESTRAS_TROZO)
+        var previoLeidas = 0
         var seguidos = 0
         var fallo = false
+        var ruido = 300.0
+        var callado = 0
+        var dormido = false
         try {
             reconocedor = Recognizer(m, FRECUENCIA.toFloat(), GRAMATICA)
             micro.startRecording()
             while (capturando) {
                 val leidas = micro.read(trozo, 0, trozo.size)
                 if (leidas <= 0) { fallo = true; break }
+
+                // La puerta de silencio, solo con la pantalla apagada: con
+                // ella encendida todo sigue exactamente como se midió.
+                if (!pantallaEncendida) {
+                    val volumen = energia(trozo, leidas)
+                    ruido = if (volumen < ruido) 0.9 * ruido + 0.1 * volumen else 0.995 * ruido + 0.005 * volumen
+                    callado = if (volumen > maxOf(ruido * 1.6, VOZ_MINIMA)) 0 else callado + 1
+                    if (callado > TROZOS_DE_SILENCIO) {
+                        if (!dormido) {
+                            reconocedor.reset()
+                            dormido = true
+                            seguidos = 0
+                        }
+                        val hueco = previo
+                        previo = trozo
+                        trozo = hueco
+                        previoLeidas = leidas
+                        continue
+                    }
+                } else {
+                    callado = 0
+                }
+                if (dormido) {
+                    dormido = false
+                    if (previoLeidas > 0) reconocedor.acceptWaveForm(previo, previoLeidas)
+                }
+
                 if (reconocedor.acceptWaveForm(trozo, leidas)) {
                     seguidos = 0
                     continue
@@ -326,11 +412,10 @@ class EscuchaServicio : Service() {
     // --- Al oírla ----------------------------------------------------------
 
     /**
-     * Se intenta abrir la pantalla del dictado, con su círculo. Si en un
-     * segundo y medio no se ha abierto —falta el permiso de mostrarse sobre
-     * otras apps, o MIUI la bloquea sin decir nada—, se atiende desde aquí:
-     * pitido, se escucha y se contesta en voz alta. Nunca hace falta tocar
-     * nada para que escuche.
+     * Se intenta abrir la pantalla del dictado, con su círculo. Si no llega a
+     * abrirse —falta el permiso de mostrarse sobre otras apps, o MIUI la
+     * bloquea sin decir nada—, se atiende desde aquí: pitido, se escucha y se
+     * contesta en voz alta. Nunca hace falta tocar nada para que escuche.
      */
     private fun alOirLaPalabra() {
         pausado = true
@@ -340,6 +425,22 @@ class EscuchaServicio : Service() {
         actualizar()
         principal.removeCallbacks(reanudarSiempre)
         principal.postDelayed(reanudarSiempre, REANUDAR_SIEMPRE_TRAS_MS)
+
+        val bloqueado = !pantallaEncendida ||
+            getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+        if (bloqueado) {
+            // Con la pantalla apagada puede estar en un bolsillo. Si el
+            // sensor de proximidad está tapado, no se enciende nada: se
+            // atiende solo con la voz, y si no se dice nada, en silencio.
+            if (!pantallaEncendida) {
+                mirarSiEstaTapado { tapado ->
+                    if (tapado) dictarAqui(silencioso = true) else abrirSobreElBloqueo()
+                }
+            } else {
+                abrirSobreElBloqueo()
+            }
+            return
+        }
 
         if (!Settings.canDrawOverlays(this)) {
             dictarAqui()
@@ -361,7 +462,58 @@ class EscuchaServicio : Service() {
         }, ESPERA_PANTALLA_MS)
     }
 
-    private fun dictarAqui() {
+    /**
+     * Con el móvil bloqueado, una app no puede abrir una pantalla sin más.
+     * Lo que sí puede es lanzar un aviso de pantalla completa, como una
+     * llamada entrante o una alarma: el propio sistema lo abre encima del
+     * bloqueo y enciende la pantalla. Es el mismo camino que la alarma de los
+     * eventos. Si no llega a abrirse (en Xiaomi, sin "mostrar en pantalla de
+     * bloqueo"), se atiende con la voz.
+     */
+    private fun abrirSobreElBloqueo() {
+        val disparo = SystemClock.elapsedRealtime()
+        Notificaciones.mostrarLlamadaDictado(this)
+        principal.postDelayed({
+            val abrio = VozActivity.abiertaEn >= disparo
+            Preferencias.ponerAperturaBloqueadaEnBloqueo(this, !abrio)
+            if (!abrio) {
+                Notificaciones.quitarDictado(this)
+                dictarAqui()
+            }
+        }, ESPERA_BLOQUEO_MS)
+    }
+
+    /**
+     * El sensor de proximidad dice si algo tapa la pantalla (un bolsillo, una
+     * funda cerrada). Se mira una sola vez; si no contesta enseguida, se da
+     * por destapado.
+     */
+    private fun mirarSiEstaTapado(alSaber: (Boolean) -> Unit) {
+        val sensores = getSystemService(SensorManager::class.java)
+        val sensor = sensores?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+        if (sensores == null || sensor == null) return alSaber(false)
+        var hecho = false
+        val oyente = object : SensorEventListener {
+            override fun onSensorChanged(evento: SensorEvent) {
+                if (hecho) return
+                hecho = true
+                sensores.unregisterListener(this)
+                alSaber(evento.values[0] < minOf(sensor.maximumRange, 3f))
+            }
+            override fun onAccuracyChanged(s: Sensor?, precision: Int) {}
+        }
+        sensores.registerListener(oyente, sensor, SensorManager.SENSOR_DELAY_FASTEST, principal)
+        principal.postDelayed({
+            if (!hecho) {
+                hecho = true
+                sensores.unregisterListener(oyente)
+                alSaber(false)
+            }
+        }, 400)
+    }
+
+    /** [silencioso]: desde un bolsillo; si no se oye nada, no se dice nada. */
+    private fun dictarAqui(silencioso: Boolean = false) {
         val m = modelo ?: return terminarDictado()
         dictando = true
         dictandoAhora = true
@@ -372,7 +524,7 @@ class EscuchaServicio : Service() {
             // Lo justo para que el pitido no se lo coma la grabación.
             SystemClock.sleep(300)
             val texto = transcribir(m)
-            principal.post { atender(texto) }
+            principal.post { atender(texto, silencioso) }
         }, "dictado-nebula").start()
     }
 
@@ -421,7 +573,11 @@ class EscuchaServicio : Service() {
         return texto.trim()
     }
 
-    private fun atender(texto: String) {
+    private fun atender(texto: String, silencioso: Boolean) {
+        if (texto.isBlank() && silencioso) {
+            Notificaciones.quitarDictado(this)
+            return terminarDictado()
+        }
         val respuesta = if (texto.isBlank()) "No te he oído." else {
             val leido = Interprete.interpretar(texto)
             when (val r = Ejecutor.ejecutar(leido, Almacen.comoAgenda(this))) {
@@ -477,6 +633,7 @@ class EscuchaServicio : Service() {
         dictandoAhora = false
         principal.removeCallbacksAndMessages(null)
         soltar()
+        mantenerDespierto(false)
         runCatching { unregisterReceiver(receptorPantalla) }
         cargador.shutdown()
         runCatching { voz?.shutdown() }

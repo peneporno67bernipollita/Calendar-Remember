@@ -105,10 +105,13 @@ object Almacen {
             override fun borrarVarios(ids: List<String>) = borrarVarios(contexto, ids)
         }
 
-    /** Eventos de hoy en adelante, que es lo que mira el widget. */
+    /** Eventos de hoy en adelante, que es lo que mira el widget. Un viaje en curso, también. */
     fun proximos(limite: Int = 20): List<Evento> {
         val corte = System.currentTimeMillis() - 12 * 3600_000L
-        return _eventos.value.filter { it.inicioMillis >= corte }.take(limite)
+        val hoy = java.time.LocalDate.now()
+        return _eventos.value.filter {
+            it.inicioMillis >= corte || (it.variosDias && !it.ultimoDia.isBefore(hoy))
+        }.take(limite)
     }
 
     fun exportar(): String {

@@ -33,9 +33,15 @@ import com.calendarremember.ui.PantallaPrincipal
 import com.calendarremember.ui.TemaNebula
 import com.calendarremember.voz.EscuchaServicio
 import com.calendarremember.voz.VozActivity
+import com.calendarremember.voz.Xiaomi
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        /** Un evento sin guardar, en JSON, para abrir el editor ya relleno. */
+        const val BORRADOR = "borrador"
+    }
 
     /**
      * Sube cada vez que se vuelve a la app. Los permisos se conceden fuera,
@@ -91,17 +97,29 @@ class MainActivity : ComponentActivity() {
                 var ajustesAbiertos by remember { mutableStateOf(false) }
                 var agendaActiva by remember { mutableStateOf(Preferencias.agendaEnBloqueo(this)) }
                 var escuchaActiva by remember { mutableStateOf(Preferencias.escuchaActiva(this)) }
+                var escuchaApagada by remember { mutableStateOf(Preferencias.escucharApagada(this)) }
                 var escuchaAbierta by remember { mutableStateOf(false) }
+                var borrador by remember { mutableStateOf<Evento?>(null) }
 
                 // Cuando se llega desde una notificación o desde un dictado
-                // dudoso, se abre directamente ese evento.
-                remember(eventos) {
+                // dudoso, se abre directamente ese evento. Desde un plan de
+                // WhatsApp o un texto compartido, el editor ya relleno.
+                remember(eventos, revision) {
                     intent?.getStringExtra("evento")?.let { id ->
                         Almacen.porId(id)?.let {
                             editando = it
+                            borrador = null
                             dialogoAbierto = true
                             intent.removeExtra("evento")
                         }
+                    }
+                    intent?.getStringExtra(BORRADOR)?.let { json ->
+                        runCatching { Evento.deJson(org.json.JSONObject(json)) }.getOrNull()?.let {
+                            editando = null
+                            borrador = it
+                            dialogoAbierto = true
+                        }
+                        intent.removeExtra(BORRADOR)
                     }
                     true
                 }
@@ -111,34 +129,48 @@ class MainActivity : ComponentActivity() {
                     alDictar = { startActivity(Intent(this, VozActivity::class.java)) },
                     alNuevo = { dia ->
                         editando = null
+                        borrador = null
                         diaSugerido = dia
                         dialogoAbierto = true
                     },
                     alAbrir = { evento ->
                         editando = evento
+                        borrador = null
                         dialogoAbierto = true
                     },
                     alAjustes = { ajustesAbiertos = true },
                 )
 
                 if (dialogoAbierto) {
-                    DialogoEvento(
-                        evento = editando,
-                        diaSugerido = diaSugerido,
-                        alGuardar = { evento ->
-                            Almacen.guardar(this, evento)
-                            dialogoAbierto = false
-                        },
-                        alBorrar = { id ->
-                            Almacen.borrar(this, id)
-                            dialogoAbierto = false
-                        },
-                        alCerrar = { dialogoAbierto = false },
-                    )
+                    // La clave obliga a rehacer el editor si cambia lo que se
+                    // edita con el diálogo ya abierto (llega otro plan).
+                    androidx.compose.runtime.key(editando?.id, borrador?.id) {
+                        DialogoEvento(
+                            evento = editando,
+                            diaSugerido = diaSugerido,
+                            borrador = borrador,
+                            alGuardar = { evento ->
+                                Almacen.guardar(this, evento)
+                                dialogoAbierto = false
+                                borrador = null
+                            },
+                            alBorrar = { id ->
+                                Almacen.borrar(this, id)
+                                dialogoAbierto = false
+                            },
+                            alCerrar = {
+                                dialogoAbierto = false
+                                borrador = null
+                            },
+                        )
+                    }
                 }
 
                 if (ajustesAbiertos) {
+                    @Suppress("UNUSED_VARIABLE") val r = revision
                     DialogoAjustes(
+                        planesActivos = planesDeWhatsApp(),
+                        alPlanes = { abrirAccesoNotificaciones() },
                         escuchaActiva = escuchaActiva,
                         alEscucha = {
                             ajustesAbiertos = false
@@ -163,10 +195,20 @@ class MainActivity : ComponentActivity() {
                     @Suppress("UNUSED_VARIABLE") val r = revision
                     DialogoEscucha(
                         activa = escuchaActiva,
+                        apagada = escuchaApagada,
                         micro = tieneMicro(),
                         sobreApps = Settings.canDrawOverlays(this),
                         bateria = bateriaSinRestricciones(),
+                        esXiaomi = Xiaomi.esXiaomi,
+                        ventanasXiaomi = Xiaomi.ventanasEnSegundoPlano(this),
+                        bloqueoXiaomi = Xiaomi.mostrarEnBloqueo(this),
                         aperturaBloqueada = Preferencias.aperturaBloqueada(this),
+                        aperturaBloqueadaEnBloqueo = Preferencias.aperturaBloqueadaEnBloqueo(this),
+                        alCambiarApagada = { si ->
+                            escuchaApagada = si
+                            Preferencias.ponerEscucharApagada(this, si)
+                            EscuchaServicio.releerAjustes(this)
+                        },
                         alPedirMicro = { pedirMicro.launch(Manifest.permission.RECORD_AUDIO) },
                         alPedirSobreApps = {
                             abrir(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -194,6 +236,30 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         revision++
+    }
+
+    // La app es de una sola instancia: si ya está abierta, lo que llega de
+    // una notificación entra por aquí y no por onCreate.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        revision++
+    }
+
+    /** Si Nébula puede leer las notificaciones (para los planes de WhatsApp). */
+    private fun planesDeWhatsApp(): Boolean =
+        androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+
+    /** El permiso de leer notificaciones solo se da desde los ajustes del sistema. */
+    private fun abrirAccesoNotificaciones() {
+        val detalle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
+                Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                ComponentName(this, com.calendarremember.avisos.OyenteWhatsApp::class.java).flattenToString(),
+            )
+        } else null
+        runCatching { startActivity(detalle ?: error("")) }
+            .onFailure { abrir(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
     }
 
     private fun tieneMicro() = ContextCompat.checkSelfPermission(

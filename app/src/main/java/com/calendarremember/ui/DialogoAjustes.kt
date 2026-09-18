@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,6 +25,8 @@ import androidx.compose.ui.window.Dialog
 
 @Composable
 fun DialogoAjustes(
+    planesActivos: Boolean,
+    alPlanes: () -> Unit,
     escuchaActiva: Boolean,
     alEscucha: () -> Unit,
     agendaActiva: Boolean,
@@ -39,7 +43,9 @@ fun DialogoAjustes(
             border = BorderStroke(1.dp, Neon.Borde),
         ) {
             Column(
-                Modifier.padding(18.dp),
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text("Ajustes", color = Neon.Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -48,10 +54,20 @@ fun DialogoAjustes(
                     titulo = if (escuchaActiva) "Escuchar «Nébula»: activada"
                         else "Escuchar «Nébula»: desactivada",
                     detalle = if (escuchaActiva)
-                        "Di «Nébula» con la pantalla encendida y se abre el dictado."
+                        "Di «Nébula» y se abre el dictado, también con el móvil bloqueado."
                     else
                         "Toca para prepararla. Necesita unos permisos.",
                     alPulsar = alEscucha,
+                )
+                Opcion(
+                    titulo = if (planesActivos) "Planes de WhatsApp: activados"
+                        else "Planes de WhatsApp: desactivados",
+                    detalle = if (planesActivos)
+                        "Si te proponen algo con día u hora, te ofrezco apuntarlo. Toca para quitarlo."
+                    else
+                        "Toca y activa Nébula en «Acceso a notificaciones»: cuando te propongan un plan, " +
+                            "te ofrezco apuntarlo de un toque. Nada sale del móvil.",
+                    alPulsar = alPlanes,
                 )
                 Opcion(
                     titulo = if (agendaActiva) "Agenda en el bloqueo: activada"

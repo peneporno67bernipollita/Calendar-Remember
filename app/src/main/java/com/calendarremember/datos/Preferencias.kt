@@ -48,4 +48,31 @@ object Preferencias {
     }
 
     private const val APERTURA_BLOQUEADA = "apertura_bloqueada"
+
+    /**
+     * Lo mismo, pero con el móvil bloqueado: ahí lo que falta en Xiaomi es
+     * "mostrar en pantalla de bloqueo".
+     */
+    fun aperturaBloqueadaEnBloqueo(contexto: Context): Boolean =
+        prefs(contexto).getBoolean(APERTURA_BLOQUEADA_BLOQUEO, false)
+
+    fun ponerAperturaBloqueadaEnBloqueo(contexto: Context, bloqueada: Boolean) {
+        prefs(contexto).edit().putBoolean(APERTURA_BLOQUEADA_BLOQUEO, bloqueada).apply()
+    }
+
+    private const val APERTURA_BLOQUEADA_BLOQUEO = "apertura_bloqueada_bloqueo"
+
+    /**
+     * Escuchar también con la pantalla apagada, como un asistente de los de
+     * fábrica. Viene apagado: mantiene el procesador despierto y gasta
+     * batería, y eso lo tiene que decidir quien usa el móvil.
+     */
+    fun escucharApagada(contexto: Context): Boolean =
+        prefs(contexto).getBoolean(ESCUCHAR_APAGADA, false)
+
+    fun ponerEscucharApagada(contexto: Context, activa: Boolean) {
+        prefs(contexto).edit().putBoolean(ESCUCHAR_APAGADA, activa).apply()
+    }
+
+    private const val ESCUCHAR_APAGADA = "escuchar_apagada"
 }

@@ -11,11 +11,10 @@ import android.widget.RemoteViews
 import com.calendarremember.MainActivity
 import com.calendarremember.R
 import com.calendarremember.datos.Almacen
+import com.calendarremember.datos.Etiquetas
 import com.calendarremember.datos.Evento
 import com.calendarremember.voz.VozActivity
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * El widget de la pantalla de inicio: lo que viene y un botón para dictar.
@@ -37,9 +36,6 @@ class WidgetProximos : AppWidgetProvider() {
 
     companion object {
 
-        private val ES = Locale("es", "ES")
-        private val FMT_HORA = DateTimeFormatter.ofPattern("HH:mm")
-        private val FMT_DIA = DateTimeFormatter.ofPattern("EEE d", ES)
 
         /** Se llama cada vez que cambian los eventos. */
         fun refrescar(contexto: Context) {
@@ -93,17 +89,7 @@ class WidgetProximos : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-        private fun etiqueta(evento: Evento): String {
-            val dia = evento.inicio.toLocalDate()
-            val hoy = LocalDate.now()
-            val cuando = when (dia) {
-                hoy -> "Hoy"
-                hoy.plusDays(1) -> "Mañana"
-                else -> dia.format(FMT_DIA).replaceFirstChar { it.uppercase(ES) }
-            }
-            return if (evento.todoElDia) cuando
-            else "$cuando ${evento.inicio.format(FMT_HORA)}"
-        }
+        private fun etiqueta(evento: Evento): String = Etiquetas.corta(evento, LocalDate.now())
 
         private fun colorDe(evento: Evento): Int = when (evento.color) {
             com.calendarremember.datos.ColorEvento.CIAN -> 0xFF00E5FF.toInt()

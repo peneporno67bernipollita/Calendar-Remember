@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.calendarremember.datos.Almacen
+import com.calendarremember.datos.Evento
 import com.calendarremember.datos.Preferencias
 import com.calendarremember.voz.EscuchaServicio
 import com.calendarremember.widget.WidgetProximos
@@ -45,6 +46,14 @@ class ReceptorAviso : BroadcastReceiver() {
                 Sonido.parar()
                 id?.let { Notificaciones.quitar(contexto, it.hashCode()) }
                 Notificaciones.refrescarAgenda(contexto)
+            }
+
+            // "Apuntar" en el aviso de un plan de WhatsApp.
+            Notificaciones.ACCION_APUNTAR_PLAN -> {
+                val json = intent.getStringExtra("plan") ?: return
+                val plan = runCatching { Evento.deJson(org.json.JSONObject(json)) }.getOrNull() ?: return
+                Almacen.guardar(contexto, plan)
+                Notificaciones.planApuntado(contexto, plan)
             }
 
             // Un evento acaba de empezar: la agenda de la pantalla de bloqueo

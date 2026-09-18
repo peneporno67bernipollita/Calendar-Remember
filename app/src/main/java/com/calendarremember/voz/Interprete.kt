@@ -59,7 +59,15 @@ data class Interpretacion(
     // Para CONSULTAR.
     val consulta: Consulta? = null,
     val desde: LocalDate? = null,
+    /**
+     * El último día. Al preguntar, el de los días por los que se pregunta; al
+     * apuntar, el de un evento que dura varios ("viaje del 27 al 3").
+     */
     val hasta: LocalDate? = null,
+    // Para alargar o acortar algo que dura varios días.
+    val nuevoHasta: LocalDate? = null,
+    /** "alarga la reunión media hora", "acorta el viaje dos días": minutos de más o de menos. */
+    val alargarMin: Long? = null,
 )
 
 object Interprete {
@@ -135,6 +143,13 @@ object Interprete {
     private val DE_NOCHE = Regex("""\b(?:cena|cenar|cenamos|copas?|fiesta|discoteca|concierto|botellon|""" +
         """esta\s+noche|por\s+la\s+noche|de\s+noche|esta\s+tarde|por\s+la\s+tarde)\b""")
 
+    /**
+     * Frases de estar en algo más que de hacer algo: "estoy de vacaciones
+     * hasta el jueves" empieza hoy; sin esto, "hasta el jueves" sería un plazo.
+     */
+    private val ESTADO = Regex("""\b(?:estoy|estamos|esta|estan|de\s+vacaciones|de\s+viaje|de\s+baja|de\s+permiso|""" +
+        """de\s+puente|fuera|vacaciones|viaje)\b""")
+
     /** Lo que no es un título por sí solo, aunque sea lo único que quede. */
     private val SOLO_ENLACE = setOf(
         "de", "del", "el", "la", "lo", "los", "las", "a", "al", "en", "que", "para",
@@ -164,6 +179,169 @@ object Interprete {
     private val N: String by lazy { """\d{1,2}|""" + NUMEROS.keys.joinToString("|") }
     private val MES: String by lazy { MESES.keys.joinToString("|") }
     private val DIA_SEMANA: String by lazy { DIAS.keys.joinToString("|") }
+
+    // --- Un día dicho, antes de saber qué fecha es ------------------------
+
+    /**
+     * "el 27", "el 3 de octubre", "el lunes", "mañana", "el 25 del mes que
+     * viene". Se guarda lo que se dijo y no la fecha, porque en un tramo la
+     * fecha de una punta depende de la otra: en "del 27 al 3", el 3 es el del
+     * mes siguiente al 27.
+     */
+    private data class DiaDicho(
+        val dia: Int? = null,
+        val mes: Int? = null,
+        val ano: Int? = null,
+        /** "del mes que viene": 1; "de este mes": 0. */
+        val mesesMas: Int? = null,
+        val semana: DayOfWeek? = null,
+        val deLaQueViene: Boolean = false,
+        val este: Boolean = false,
+        /** hoy 0, mañana 1, pasado mañana 2. */
+        val relativo: Int? = null,
+    ) {
+        /** Trae su propio mes: no depende de la otra punta del tramo. */
+        val conMes: Boolean get() = mes != null || mesesMas != null
+        /** Un número y nada más: "de 5 a 7" son horas, no días. */
+        val soloNumero: Boolean get() = dia != null && mes == null && mesesMas == null && semana == null
+    }
+
+    private const val MES_RELATIVO =
+        """del?\s+(?:mes\s+(?:que\s+viene|siguiente|proximo)|proximo\s+mes|siguiente\s+mes|este\s+mes)"""
+
+    private val DIA_CON_MES by lazy {
+        Regex("""(?:(?:el|la)\s+)?(?:($DIA_SEMANA)\s+)?(?:dia\s+)?($N)\s+de\s+($MES)""" +
+            """(?:\s+(?:del?\s+)?(\d{4})|\s+(del\s+(?:ano\s+que\s+viene|proximo\s+ano)))?\b""")
+    }
+    private val DIA_CIFRAS by lazy {
+        Regex("""(?:el\s+)?(?:($DIA_SEMANA)\s+)?(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b""")
+    }
+    private val DIA_NUMERO by lazy {
+        Regex("""(?:el\s+)?(?:($DIA_SEMANA)\s+)?(?:dia\s+)?(\d{1,2}|$N)(\s+$MES_RELATIVO)?\b""" +
+            """(?!\s*(?:[:.]\d|de\s+la|y\s+(?:media|cuarto)|menos\s|h\b|horas|minutos|dias|semanas|meses))""")
+    }
+    private val DIA_SEMANA_SOLO by lazy {
+        Regex("""(?:el\s+|este\s+|(?:el\s+)?proximo\s+)?($DIA_SEMANA)""" +
+            """(\s+que\s+viene|\s+proximo|\s+de\s+la\s+(?:semana\s+que\s+viene|proxima\s+semana))?\b""")
+    }
+    private val DIA_RELATIVO = Regex("""(pasado\s+manana|manana|hoy)\b""")
+
+    /** El día que empieza justo en [i], y dónde acaba. */
+    private fun diaEn(texto: String, i: Int, hoy: LocalDate): Pair<DiaDicho, Int>? {
+        if (i >= texto.length) return null
+        DIA_CON_MES.matchAt(texto, i)?.let { m ->
+            val g = m.groupValues
+            val d = numero(g[2])
+            if (d != null && d in 1..31) {
+                val ano = g[4].toIntOrNull() ?: if (g[5].isNotEmpty()) hoy.year + 1 else null
+                return DiaDicho(dia = d, mes = MESES[g[3]], ano = ano) to m.range.last + 1
+            }
+        }
+        DIA_CIFRAS.matchAt(texto, i)?.let { m ->
+            val d = m.groupValues[2].toInt()
+            val mes = m.groupValues[3].toInt()
+            if (d in 1..31 && mes in 1..12) {
+                val ano = m.groupValues[4].toIntOrNull()?.let { if (it < 100) 2000 + it else it }
+                return DiaDicho(dia = d, mes = mes, ano = ano) to m.range.last + 1
+            }
+        }
+        DIA_NUMERO.matchAt(texto, i)?.let { m ->
+            val d = numero(m.groupValues[2])
+            if (d != null && d in 1..31) {
+                val relativo = m.groupValues[3]
+                val mas = when {
+                    relativo.isEmpty() -> null
+                    relativo.contains("este") -> 0
+                    else -> 1
+                }
+                return DiaDicho(dia = d, mesesMas = mas, semana = DIAS[m.groupValues[1]]) to m.range.last + 1
+            }
+        }
+        DIA_SEMANA_SOLO.matchAt(texto, i)?.let { m ->
+            return DiaDicho(
+                semana = DIAS[m.groupValues[1]],
+                deLaQueViene = m.groupValues[2].isNotEmpty() || m.value.contains("proximo"),
+                este = m.value.startsWith("este"),
+            ) to m.range.last + 1
+        }
+        DIA_RELATIVO.matchAt(texto, i)?.let { m ->
+            val r = when {
+                m.value.startsWith("pasado") -> 2
+                m.value.startsWith("manana") -> 1
+                else -> 0
+            }
+            return DiaDicho(relativo = r) to m.range.last + 1
+        }
+        return null
+    }
+
+    /** La fecha de un día dicho suelto, como la entiende cualquiera. */
+    private fun resolver(d: DiaDicho, hoy: LocalDate): LocalDate {
+        val dia = d.dia
+        val semana = d.semana
+        return when {
+            d.relativo != null -> hoy.plusDays(d.relativo.toLong())
+            dia != null && d.mes != null ->
+                if (d.ano != null) fechaSegura(d.ano, d.mes, dia) else proximaFecha(hoy, d.mes, dia)
+            dia != null && d.mesesMas != null ->
+                hoy.plusMonths(d.mesesMas.toLong()).let { fechaSegura(it.year, it.monthValue, dia) }
+            dia != null -> {
+                val base = if (dia < hoy.dayOfMonth) hoy.plusMonths(1) else hoy
+                fechaSegura(base.year, base.monthValue, dia)
+            }
+            semana != null -> when {
+                d.deLaQueViene -> hoy.with(TemporalAdjusters.next(DayOfWeek.MONDAY))
+                    .with(TemporalAdjusters.nextOrSame(semana))
+                d.este -> hoy.with(TemporalAdjusters.nextOrSame(semana))
+                else -> hoy.with(TemporalAdjusters.next(semana))
+            }
+            else -> hoy
+        }
+    }
+
+    /** El primer día a partir de [desde] que encaja con lo dicho: el final de un tramo. */
+    private fun despuesDe(d: DiaDicho, desde: LocalDate, hoy: LocalDate): LocalDate {
+        val dia = d.dia
+        val semana = d.semana
+        return when {
+            d.relativo != null || d.mesesMas != null || d.deLaQueViene || d.ano != null -> resolver(d, hoy)
+            dia != null && d.mes != null -> fechaSegura(desde.year, d.mes, dia)
+                .let { if (it.isBefore(desde)) fechaSegura(desde.year + 1, d.mes, dia) else it }
+            dia != null -> {
+                val base = if (dia < desde.dayOfMonth) desde.plusMonths(1) else desde
+                fechaSegura(base.year, base.monthValue, dia)
+            }
+            // "De lunes a lunes": el de la semana siguiente.
+            semana != null -> desde.with(TemporalAdjusters.nextOrSame(semana))
+                .let { if (it == desde) it.plusWeeks(1) else it }
+            else -> desde
+        }
+    }
+
+    /**
+     * Las dos puntas de un tramo. Si el final trae mes ("del 27 al 3 de
+     * octubre", "del 25 al 27 del mes que viene"), manda él y el principio se
+     * pone detrás: el 27 de septiembre. Si no, manda el principio.
+     */
+    private fun resolverTramo(d1: DiaDicho, d2: DiaDicho, hoy: LocalDate): Pair<LocalDate, LocalDate>? {
+        val dia1 = d1.dia
+        val primero: LocalDate
+        val ultimo: LocalDate
+        if (d2.conMes && dia1 != null && d1.relativo == null) {
+            ultimo = resolver(d2, hoy)
+            primero = when {
+                d1.mes != null && d1.ano == null -> fechaSegura(ultimo.year, d1.mes, dia1)
+                    .let { if (it.isAfter(ultimo)) fechaSegura(ultimo.year - 1, d1.mes, dia1) else it }
+                d1.conMes -> resolver(d1, hoy)
+                dia1 <= ultimo.dayOfMonth -> fechaSegura(ultimo.year, ultimo.monthValue, dia1)
+                else -> ultimo.minusMonths(1).let { fechaSegura(it.year, it.monthValue, dia1) }
+            }
+        } else {
+            primero = resolver(d1, hoy)
+            ultimo = despuesDe(d2, primero, hoy)
+        }
+        return if (ultimo.isBefore(primero)) null else primero to ultimo
+    }
 
     // ======================================================================
 
@@ -281,7 +459,8 @@ object Interprete {
             else -> {
                 val leido = leer(resto, ahora, detectarBorrado = false)
                 val dia = if (leido.fechaDicha) leido.inicio.toLocalDate() else hoy
-                dia to dia
+                // "¿Qué tengo del 20 al 25?": el tramo entero.
+                dia to (leido.hasta ?: dia)
             }
         }
         return consulta(Consulta.AGENDA, desde, hasta)
@@ -298,11 +477,12 @@ object Interprete {
     private fun leerCambio(original: String, ahora: LocalDateTime): Interpretacion? {
         val texto = normalizar(original)
         val imperativo = """(?:cambia|cambie|mueve|mueva|pasa|pase|aplaza|aplace|retrasa|retrase|""" +
-            """atrasa|atrase|adelanta|adelante|traslada|reprograma|pospon|posponga)(?:me)?(?:lo|la|los|las)?"""
+            """atrasa|atrase|adelanta|adelante|traslada|reprograma|pospon|posponga|""" +
+            """alarga|alargue|amplia|amplie|extiende|extienda|prolonga|prolongue|acorta|acorte)(?:me)?(?:lo|la|los|las)?"""
         val infinitivo = """(?:cambiar|mover|pasar|aplazar|retrasar|atrasar|adelantar|trasladar|""" +
-            """reprogramar|posponer)(?:me)?(?:lo|la|los|las)?"""
+            """reprogramar|posponer|alargar|ampliar|extender|prolongar|acortar)(?:me)?(?:lo|la|los|las)?"""
         val pegado = """(?:cambia|mueve|pasa|aplaza|retrasa|atrasa|adelanta|traslada|reprograma|""" +
-            """pospon)(?:me)?(?:lo|la|los|las)"""
+            """pospon|alarga|amplia|extiende|prolonga|acorta)(?:me)?(?:lo|la|los|las)"""
 
         val verbo = listOf(
             """^\s*(?:$MULETILLAS\s*[,.]?\s*)*(?:$imperativo)\b""",
@@ -321,6 +501,9 @@ object Interprete {
             original.substring(verbo.range.last + 1)
         val restoN = normalizar(resto)
         val raiz = texto.substring(verbo.range).trim().substringAfterLast(' ')
+        // Alargar o acortar no mueve el principio: cambia dónde acaba.
+        val alarga = Regex("""^(?:alarg|ampli|extiend|exten|prolong|acort)""").containsMatchIn(raiz)
+        val acorta = raiz.startsWith("acort")
 
         // ¿Un desplazamiento? "una hora", "media hora", "15 minutos", "una semana".
         val cantidad = Regex(
@@ -329,7 +512,7 @@ object Interprete {
         ).find(restoN)
         val mueveEnElTiempo = Regex("""^(?:retras|atras|adelant|aplaz|aplac|pospon|pospu)""").containsMatchIn(raiz) ||
             (cantidad?.groupValues?.get(4)?.isNotEmpty() == true)
-        if (cantidad != null && mueveEnElTiempo) {
+        if (cantidad != null && (mueveEnElTiempo || alarga)) {
             val g = cantidad.groupValues
             val minutos: Long = when {
                 g[1].isNotEmpty() -> (numero(g[1]) ?: 0) * 60L + 30
@@ -349,6 +532,12 @@ object Interprete {
             val atras = raiz.startsWith("adelant") || g[4] == "antes"
             val objetivo = resto.substring(0, cantidad.range.first) + " " + resto.substring(cantidad.range.last + 1)
             val leido = leer(objetivo, ahora, detectarBorrado = false)
+            if (alarga) {
+                return leido.copy(
+                    accion = Accion.MOVER, dictado = original, confianza = Confianza.ALTA,
+                    alargarMin = if (acorta) -minutos else minutos,
+                )
+            }
             return leido.copy(
                 accion = Accion.MOVER, dictado = original, confianza = Confianza.ALTA,
                 desplazamientoMin = if (atras) -minutos else minutos,
@@ -367,6 +556,13 @@ object Interprete {
             if (!(destino.fechaDicha || destino.horaDicha)) continue
             if (destino.titulo.isNotBlank()) continue
             val leido = leer(resto.substring(0, marca.range.first), ahora, detectarBorrado = false)
+            if (alarga) {
+                if (!destino.fechaDicha) continue
+                return leido.copy(
+                    accion = Accion.MOVER, dictado = original, confianza = Confianza.ALTA,
+                    nuevoHasta = destino.inicio.toLocalDate(),
+                )
+            }
             return leido.copy(
                 accion = Accion.MOVER, dictado = original, confianza = Confianza.ALTA,
                 nuevaFecha = if (destino.fechaDicha) destino.inicio.toLocalDate() else null,
@@ -446,6 +642,10 @@ object Interprete {
         var diaRepetido: DayOfWeek? = null
         var hoyDicho = false
         val deNoche = pistaNoche || DE_NOCHE.containsMatchIn(texto)
+        // Lo que dura varios días: el último día, o cómo sacarlo del primero.
+        var hasta: LocalDate? = null
+        var hastaDicho: DiaDicho? = null
+        var cuantoDura: ((LocalDate) -> LocalDate)? = null
 
         // 1. Repetición: "todos los martes", "cada día", "todos los años".
         buscar("""\b(?:todos\s+los|todas\s+las|cada)\s+(dias?|semanas?|mes(?:es)?|anos?|$DIA_SEMANA|""" +
@@ -517,12 +717,98 @@ object Interprete {
             if (conHora) hora = destino.hour to destino.minute
         }
 
-        // 5. Un rango de días: "del 1 al 15 de agosto" empieza el 1.
+        // 4b. Cuántos días dura: "durante tres días", "dos semanas", "una
+        //     semana entera". "En dos días" ya se lo ha llevado la regla de
+        //     antes, y "dos días antes" no es una duración.
+        buscar("""\b(?:(?:durante|por)\s+)?(?:toda\s+)?($N)\s+(dias?|semanas?|mes(?:es)?)""" +
+            """(?:\s+(?:enter[oa]s?|seguid[oa]s|complet[oa]s))?\b(?!\s+(?:antes|despues|mas\s+tarde))""")?.let { m ->
+            val n = (numero(m.groupValues[1]) ?: 1).toLong()
+            val u = m.groupValues[2]
+            cuantoDura = when {
+                u.startsWith("dia") -> { d -> d.plusDays(n - 1) }
+                u.startsWith("semana") -> { d -> d.plusWeeks(n).minusDays(1) }
+                else -> { d -> d.plusMonths(n).minusDays(1) }
+            }
+        }
+
+        // 5. Varios días: "del 27 al 3", "del 25 al 27 del mes que viene", "de
+        //    lunes a viernes", "desde mañana hasta el domingo", "entre el 3 y
+        //    el 5 de octubre". Entre las dos puntas puede ir la hora de
+        //    salida ("del viernes a las 6 al domingo"): esa la lee la regla
+        //    de la hora.
         if (fecha == null) {
-            buscar("""\bdel?\s+(\d{1,2}|$N)\s+al?\s+(\d{1,2}|$N)\s+de\s+($MES)\b""")?.let { m ->
-                val d = numero(m.groupValues[1])
-                val mes = MESES[m.groupValues[3]]!!
-                if (d != null && d in 1..31) fecha = proximaFecha(hoy, mes, d)
+            val anclas = Regex("""\b(del|de|desde\s+el|desde|entre\s+el|entre|a\s+partir\s+del?)\s+""")
+            val horaEnMedio = Regex("""\s+a\s+las?\s+(?:$N)(?:\s*[:.]\s*\d{2}|\s+y\s+(?:media|cuarto))?""" +
+                """(?:\s+de\s+la\s+(?:manana|tarde|noche))?""")
+            for (a in anclas.findAll(texto)) {
+                if (pisaLoYaLeido(a.range)) continue
+                val palabra = a.groupValues[1]
+                val (d1, fin1) = diaEn(texto, a.range.last + 1, hoy) ?: continue
+                // "De 5 a 7" son horas; "del 5 al 7", días.
+                if (palabra == "de" && d1.soloNumero) continue
+                val entre = palabra.startsWith("entre")
+                val hora = horaEnMedio.matchAt(texto, fin1)
+                val tras = hora?.range?.last?.plus(1) ?: fin1
+                val conector = Regex(if (entre) """\s+y\s+(?:el\s+)?""" else """\s+(?:al|a|hasta\s+el|hasta)\s+""")
+                    .matchAt(texto, tras) ?: continue
+                val (d2, fin2) = diaEn(texto, conector.range.last + 1, hoy) ?: continue
+                val (primero, ultimo) = resolverTramo(d1, d2, hoy) ?: continue
+                val puntas = listOf(a.range.first until fin1, tras until fin2)
+                if (puntas.any { pisaLoYaLeido(it) }) continue
+                consumido.addAll(puntas)
+                fecha = primero
+                if (ultimo.isAfter(primero)) hasta = ultimo
+                hoyDicho = primero == hoy
+                break
+            }
+        }
+
+        // 5b. "Hasta el jueves": el final de algo cuyo principio se dice en
+        //     otra parte de la frase ("el lunes", o nada: hoy). Se resuelve
+        //     al final, cuando ya se sabe el principio.
+        if (hasta == null) {
+            Regex("""\bhasta\s+(?:el\s+)?""").findAll(texto).firstOrNull { !pisaLoYaLeido(it.range) }?.let { h ->
+                diaEn(texto, h.range.last + 1, hoy)?.let { (d, fin) ->
+                    val rango = h.range.first until fin
+                    if (!pisaLoYaLeido(rango)) {
+                        consumido.add(rango)
+                        hastaDicho = d
+                    }
+                }
+            }
+        }
+
+        // 5c. Todo un mes, una semana o un fin de semana: "todo agosto",
+        //     "toda la semana que viene", "todo el finde".
+        if (fecha == null) {
+            buscar("""\b(?:todo|durante)\s+(?:el\s+)?(?:mes\s+de\s+)?($MES)\b""")?.let { m ->
+                val mes = MESES[m.groupValues[1]]!!
+                val ano = if (mes < hoy.monthValue) hoy.year + 1 else hoy.year
+                val primero = LocalDate.of(ano, mes, 1)
+                fecha = if (primero.isBefore(hoy)) hoy else primero
+                hasta = primero.with(TemporalAdjusters.lastDayOfMonth())
+            } ?: buscar("""\b(?:todo|durante)\s+el\s+(?:mes\s+que\s+viene|proximo\s+mes)\b""")?.let {
+                val primero = hoy.plusMonths(1).withDayOfMonth(1)
+                fecha = primero
+                hasta = primero.with(TemporalAdjusters.lastDayOfMonth())
+            } ?: buscar("""\b(?:toda|durante)\s+la\s+(?:semana\s+que\s+viene|proxima\s+semana)\b""")?.let {
+                val lunes = hoy.with(TemporalAdjusters.next(DayOfWeek.MONDAY))
+                fecha = lunes
+                hasta = lunes.plusDays(6)
+            } ?: buscar("""\b(?:toda|durante)\s+(?:la|esta)\s+semana\b""")?.let {
+                fecha = hoy
+                hasta = hoy.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
+            } ?: buscar("""\b(?:todo|durante)\s+(?:el|este)\s+(?:finde|fin\s+de\s+semana)(\s+que\s+viene|\s+proximo)?\b""")?.let { m ->
+                val sabado = if (m.groupValues[1].isNotEmpty())
+                    hoy.with(TemporalAdjusters.next(DayOfWeek.MONDAY)).plusDays(5)
+                else hoy.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
+                // Si ya es domingo, lo que queda del fin de semana es hoy.
+                if (hoy.dayOfWeek == DayOfWeek.SUNDAY && m.groupValues[1].isEmpty()) {
+                    fecha = hoy
+                } else {
+                    fecha = sabado
+                    hasta = sabado.plusDays(1)
+                }
             }
         }
 
@@ -622,7 +908,8 @@ object Interprete {
         // 10. Fechas con número. Un "el martes" pegado delante ("el martes 29",
         //     "el jueves 1 de octubre") se consume con la fecha: el número
         //     manda y el día de la semana solo lo acompaña.
-        val antesDelDia = """\b(?:(?:el|del|este|para\s+el|antes\s+del)\s+)?(?:(?:$DIA_SEMANA)\s+)?(?:(?:el|del)\s+)?(?:dia\s+)?"""
+        val antesDelDia = """\b(?:(?:el|del|este|para\s+el|antes\s+del|desde\s+el|desde|a\s+partir\s+del?)\s+)?""" +
+            """(?:(?:$DIA_SEMANA)\s+)?(?:(?:el|del)\s+)?(?:dia\s+)?"""
         if (fecha == null) {
             buscar("""$antesDelDia($N)\s+de\s+($MES)(?:\s+(?:de[l]?\s+)?(\d{4})|\s+(del\s+(?:ano\s+que\s+viene|proximo\s+ano)))?\b""")?.let { m ->
                 val d = numero(m.groupValues[1])
@@ -651,7 +938,7 @@ object Interprete {
         if (fecha == null) {
             // "el día 5", "el 22", "el martes 29", "el 5 del mes que viene".
             // Solo con cifras y sin nada detrás que lo haga una hora.
-            buscar("""\b(?:(?:el|del|este|para\s+el|antes\s+del)\s+)(?:(?:$DIA_SEMANA)\s+)?(?:dia\s+)?(\d{1,2})""" +
+            buscar("""\b(?:(?:el|del|este|para\s+el|antes\s+del|desde\s+el|a\s+partir\s+del)\s+)(?:(?:$DIA_SEMANA)\s+)?(?:dia\s+)?(\d{1,2})""" +
                 """(\s+del\s+(?:mes\s+que\s+viene|proximo\s+mes))?""" +
                 """(?!\s*(?:[:./-]\d|de\s+la|y\s|menos\s|h\b|horas|minutos|dias|semanas|meses))\b""")?.let { m ->
                 val d = m.groupValues[1].toInt()
@@ -668,7 +955,7 @@ object Interprete {
         //     es como se entiende en España: dicho un jueves, el lunes que
         //     viene es el lunes siguiente, no el de dentro de once días.
         if (fecha == null) {
-            buscar("""\b(?:del\s+|el\s+|al\s+|este\s+|para\s+el\s+|antes\s+del\s+|(?:el\s+)?proximo\s+)?""" +
+            buscar("""\b(?:del\s+|el\s+|al\s+|este\s+|para\s+el\s+|antes\s+del\s+|desde\s+el\s+|a\s+partir\s+del\s+|(?:el\s+)?proximo\s+)?""" +
                 """($DIA_SEMANA)(\s+que\s+viene|\s+proximo|\s+de\s+la\s+(?:semana\s+que\s+viene|proxima\s+semana))?\b""")?.let { m ->
                 // "el martes o el miércoles": vale el primero, y el segundo no
                 // se queda en el título.
@@ -718,7 +1005,7 @@ object Interprete {
         // 14. Relativos sueltos. "mañana" ya no puede confundirse: si formaba
         //     parte de "de la mañana", la regla 8 se lo comió.
         if (fecha == null) {
-            buscar("""\b(pasado\s+manana|manana|hoy|esta\s+noche|esta\s+tarde|esta\s+manana)\b""")?.let { m ->
+            buscar("""\b(?:a\s+partir\s+de\s+|desde\s+)?(pasado\s+manana|manana|hoy|esta\s+noche|esta\s+tarde|esta\s+manana)\b""")?.let { m ->
                 val clave = m.groupValues[1].replace(Regex("""\s+"""), " ")
                 fecha = when (clave) {
                     "pasado manana" -> hoy.plusDays(2)
@@ -740,6 +1027,23 @@ object Interprete {
         }
 
         // --- Resolución --------------------------------------------------
+
+        // "Hasta el jueves" con el principio dicho: el final del tramo. Sin
+        // principio, depende: "estoy de vacaciones hasta el jueves" empieza
+        // hoy, pero "tengo hasta el jueves para pagar la multa" es un plazo, y
+        // lo que se apunta es el jueves.
+        hastaDicho?.let { d ->
+            val desde = fecha
+            when {
+                desde != null -> despuesDe(d, desde, hoy).takeIf { it.isAfter(desde) }?.let { hasta = it }
+                ESTADO.containsMatchIn(texto) -> {
+                    fecha = hoy
+                    despuesDe(d, hoy, hoy).takeIf { it.isAfter(hoy) }?.let { hasta = it }
+                }
+                else -> fecha = resolver(d, hoy)
+            }
+        }
+
         val todoElDia = hora == null
         val fechaDicha = fecha != null
         val horaDicha = hora != null
@@ -770,6 +1074,8 @@ object Interprete {
         }
 
         val inicio = fecha!!.atTime(hora?.first ?: 0, hora?.second ?: 0)
+        if (hasta == null) cuantoDura?.let { dura -> hasta = dura(fecha!!) }
+        val ultimoDia = hasta?.takeIf { it.isAfter(fecha!!) }
 
         // --- Título --------------------------------------------------------
         // Se recorta del texto ORIGINAL (con tildes) usando los tramos que las
@@ -787,9 +1093,9 @@ object Interprete {
 
         var titulo = original
         for (rango in tramos.sortedByDescending { it.first }) {
-            val desde = rango.first.coerceIn(0, titulo.length)
-            val hasta = (rango.last + 1).coerceIn(desde, titulo.length)
-            titulo = titulo.substring(0, desde) + " " + titulo.substring(hasta)
+            val de = rango.first.coerceIn(0, titulo.length)
+            val a = (rango.last + 1).coerceIn(de, titulo.length)
+            titulo = titulo.substring(0, de) + " " + titulo.substring(a)
         }
         titulo = titulo.replace(Regex("""[¿?¡!]"""), " ").replace(Regex("""\s+"""), " ").trim()
 
@@ -831,6 +1137,7 @@ object Interprete {
             confianza = Confianza.ALTA,
             repeticion = repeticion,
             avisosDichos = avisos != null,
+            hasta = ultimoDia,
         )
     }
 

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
@@ -41,7 +43,9 @@ import com.calendarremember.datos.ColorEvento
 import com.calendarremember.datos.Evento
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 private val ES = Locale("es", "ES")
@@ -62,12 +66,14 @@ private val OPCIONES_AVISO = listOf(
 fun DialogoEvento(
     evento: Evento?,
     diaSugerido: LocalDate?,
+    /** Un evento nuevo ya relleno (un plan de WhatsApp) que falta guardar. */
+    borrador: Evento? = null,
     alGuardar: (Evento) -> Unit,
     alBorrar: ((String) -> Unit)?,
     alCerrar: () -> Unit,
 ) {
     val contexto = LocalContext.current
-    val partida = evento ?: Evento(
+    val partida = evento ?: borrador ?: Evento(
         titulo = "",
         inicio = (diaSugerido ?: LocalDate.now()).atTime(12, 0),
     )
@@ -79,6 +85,8 @@ fun DialogoEvento(
     var todoElDia by remember { mutableStateOf(partida.todoElDia) }
     var color by remember { mutableStateOf(partida.color) }
     var avisos by remember { mutableStateOf(partida.avisos) }
+    // El último día, si dura varios. Null: solo ese día.
+    var hasta by remember { mutableStateOf(partida.hasta?.takeIf { partida.variosDias }) }
 
     Dialog(onDismissRequest = alCerrar) {
         Surface(
@@ -87,7 +95,9 @@ fun DialogoEvento(
             border = BorderStroke(1.dp, Neon.Borde),
         ) {
             Column(
-                Modifier.padding(18.dp),
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Text(
@@ -114,7 +124,12 @@ fun DialogoEvento(
                     ) {
                         DatePickerDialog(
                             contexto,
-                            { _, a, m, d -> fecha = LocalDate.of(a, m + 1, d) },
+                            { _, a, m, d ->
+                                val nueva = LocalDate.of(a, m + 1, d)
+                                // Lo que dura varios días se mueve entero.
+                                hasta = hasta?.plusDays(ChronoUnit.DAYS.between(fecha, nueva))
+                                fecha = nueva
+                            },
                             fecha.year, fecha.monthValue - 1, fecha.dayOfMonth,
                         ).show()
                     }
@@ -130,6 +145,38 @@ fun DialogoEvento(
                                 hora.hour, hora.minute, true,
                             ).show()
                         }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Selector(
+                        etiqueta = "Hasta",
+                        valor = hasta?.format(FMT_FECHA) ?: "Solo ese día",
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        val base = hasta ?: fecha.plusDays(1)
+                        DatePickerDialog(
+                            contexto,
+                            { _, a, m, d ->
+                                hasta = LocalDate.of(a, m + 1, d).takeIf { it.isAfter(fecha) }
+                            },
+                            base.year, base.monthValue - 1, base.dayOfMonth,
+                        ).apply {
+                            datePicker.minDate = fecha.plusDays(1)
+                                .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                        }.show()
+                    }
+                    if (hasta != null) {
+                        Text(
+                            text = "Quitar",
+                            color = Neon.Tenue,
+                            fontSize = 14.sp,
+                            modifier = Modifier
+                                .padding(start = 6.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { hasta = null }
+                                .padding(horizontal = 10.dp, vertical = 12.dp),
+                        )
                     }
                 }
 
@@ -239,6 +286,7 @@ fun DialogoEvento(
                                         todoElDia = todoElDia,
                                         color = color,
                                         avisos = avisos.sortedDescending(),
+                                        hasta = hasta?.takeIf { it.isAfter(fecha) },
                                     )
                                 )
                             }
