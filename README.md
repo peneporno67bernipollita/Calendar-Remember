@@ -34,7 +34,17 @@ un APK nuevo automáticamente.
 
 ## Dictar un evento
 
-Cuatro caminos, ninguno de los cuales deja nada escuchando en segundo plano:
+**Diciendo «Nébula»** con la pantalla encendida, en el inicio o en el bloqueo:
+se abre el dictado y, al terminar, te responde en voz alta. Se activa en
+*Ajustes → Escuchar «Nébula»*, que guía por los permisos que hacen falta
+(en Xiaomi, varios). Con la pantalla apagada no escucha nada.
+
+El motor de voz sin conexión no conoce la palabra «nébula», pero limitado a
+una sola palabra cercana que sí conoce, «nebulosa», la reconoce y rechaza lo
+demás («novela», «nevera», una charla normal). Se probó con audio antes de
+montarlo así.
+
+Y sin palabra clave, cuatro caminos más, todos sin desbloquear:
 
 - **Ajustes rápidos**: baja la persiana y toca «Dictar». Se llega desde la
   pantalla de bloqueo.
@@ -75,10 +85,9 @@ Para forzarlo: "de la mañana", "de la tarde".
 
 Vale decirlo por delante («cancela la cena del viernes») o por detrás
 («lo del finde, cancélalo»), que es como sale al hablar. Busca entre lo que
-tienes por el texto y por la fecha, y **siempre enseña qué va a borrar antes
-de hacerlo**: equivocarse al crear un evento se arregla borrándolo, pero
-equivocarse al borrar pierde algo que no vuelve. Si hay varios parecidos, los
-muestra para que elijas; si ninguno encaja, lo dice y no toca nada.
+tienes por el texto, la fecha y la hora, y **si está claro qué evento es, lo
+borra sin preguntar** y te lo dice. Solo pregunta cuál cuando dos encajan por
+igual. Si ninguno encaja, ofrece apuntar la frase, por si era eso.
 
 ## Estructura
 
@@ -116,12 +125,9 @@ si una regla de interpretación se rompe, el APK no llega a generarse.
 
 ## Lo que no hace, y por qué
 
-- **Palabra clave con la pantalla apagada** («oye Nébula»). Descartado a
-  propósito. Exige un servicio con el micrófono abierto a todas horas, una
-  notificación permanente que Android obliga a mostrar y un consumo continuo
-  de batería; encima, las capas que matan procesos en segundo plano lo cortan
-  cada dos por tres. Los cuatro atajos de arriba llegan a lo mismo con un
-  gesto y sin coste. Si algún día compensa, se añade sobre esta base.
+- **Escuchar con la pantalla apagada.** La palabra clave solo funciona con
+  la pantalla encendida, a propósito: oír toda la noche en el bolsillo gasta
+  batería y no aporta nada a «enciendo el móvil y le hablo».
 - **Widget en la pantalla de bloqueo.** No depende de la app: Android retiró
   los widgets de terceros del bloqueo y solo los ha devuelto a partir de la
   versión 14, en tablets. El widget ya se declara apto para esa ubicación, así
