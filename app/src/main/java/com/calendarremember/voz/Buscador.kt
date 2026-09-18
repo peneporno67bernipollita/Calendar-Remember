@@ -3,6 +3,8 @@ package com.calendarremember.voz
 import com.calendarremember.datos.Evento
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
 /**
@@ -15,13 +17,18 @@ import kotlin.math.abs
  */
 object Buscador {
 
-    /** Palabras que no distinguen nada: aparecen en cualquier frase. */
+    /**
+     * Palabras que no distinguen un evento de otro: aparecen en cualquier
+     * frase, o son el propio nombre de lo que se busca ("el evento de...").
+     */
     private val VACIAS = setOf(
-        "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del",
-        "al", "a", "que", "lo", "mi", "mis", "tu", "tus", "su", "sus", "con",
+        "el", "la", "los", "las", "lo", "un", "una", "unos", "unas", "de",
+        "del", "al", "a", "que", "mi", "mis", "tu", "tus", "su", "sus", "con",
         "para", "por", "en", "y", "o", "se", "ya", "no", "me", "te", "le",
         "voy", "vas", "va", "ir", "tengo", "tenia", "tiene", "hay", "es",
-        "eso", "esa", "ese", "esto", "esta", "este", "cosa", "plan",
+        "eso", "esa", "ese", "esto", "esta", "este", "cosa", "plan", "nada",
+        "todo", "evento", "eventos", "recordatorio", "recordatorios", "aviso",
+        "avisos", "nebula",
     )
 
     data class Candidato(val evento: Evento, val puntos: Int)
@@ -36,29 +43,36 @@ object Buscador {
         fecha: LocalDate?,
         eventos: List<Evento>,
         ahora: LocalDateTime = LocalDateTime.now(),
+        hora: LocalTime? = null,
     ): List<Candidato> {
-        val palabras = palabrasUtiles(criterio)
+        val buscadas = palabras(criterio)
 
         return eventos.mapNotNull { evento ->
             var puntos = 0
 
-            // Coincidencia por texto: cada palabra con peso que aparezca en el
-            // título suma. Es lo que más manda, porque es lo que distingue un
-            // evento de otro.
-            val titulo = normalizar(evento.titulo)
-            val acertadas = palabras.count { titulo.contains(it) }
-            puntos += acertadas * 3
+            // Por texto: cada palabra con peso que aparezca en el título suma.
+            // Es lo que más distingue un evento de otro.
+            val delTitulo = palabras(evento.titulo)
+            puntos += buscadas.count { b -> delTitulo.any { t -> parecidas(b, t) } } * 3
 
-            // Coincidencia por fecha. Un día de margen cubre el "finde", que
-            // se resuelve al sábado pero puede ser el domingo.
+            // Por fecha. Un día de margen cubre el "finde", que se resuelve al
+            // sábado pero puede ser el domingo.
             if (fecha != null) {
-                val dias = abs(java.time.temporal.ChronoUnit.DAYS.between(
-                    fecha, evento.inicio.toLocalDate()
-                ))
+                val dias = abs(ChronoUnit.DAYS.between(fecha, evento.inicio.toLocalDate()))
                 puntos += when {
                     dias == 0L -> 4
                     dias == 1L -> 3
                     dias <= 6L -> 1
+                    else -> 0
+                }
+            }
+
+            // Por hora: "cancela lo de las diez" no dice ni qué ni qué día.
+            if (hora != null && !evento.todoElDia) {
+                val minutos = abs(ChronoUnit.MINUTES.between(hora, evento.inicio.toLocalTime()))
+                puntos += when {
+                    minutos == 0L -> 4
+                    minutos <= 30L -> 2
                     else -> 0
                 }
             }
@@ -82,8 +96,20 @@ object Buscador {
         return if (mejor.puntos > segundo.puntos) mejor.evento else null
     }
 
-    private fun palabrasUtiles(criterio: String): List<String> =
-        normalizar(criterio)
+    /**
+     * Dos palabras cuentan como la misma si comparten raíz: "reunión" y
+     * "reuniones", "cumple" y "cumpleaños", "dentista" y "dentistas". El
+     * reconocedor de voz no siempre escribe la palabra igual que el título.
+     */
+    private fun parecidas(a: String, b: String): Boolean {
+        if (a == b) return true
+        if (a.length < 4 || b.length < 4) return false
+        val raiz = minOf(5, a.length, b.length)
+        return a.take(raiz) == b.take(raiz)
+    }
+
+    private fun palabras(texto: String): List<String> =
+        normalizar(texto)
             .split(Regex("[^\\p{L}\\p{N}]+"))
             .filter { it.length > 2 && it !in VACIAS }
 

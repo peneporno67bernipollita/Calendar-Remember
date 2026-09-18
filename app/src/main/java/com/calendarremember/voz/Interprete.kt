@@ -33,6 +33,8 @@ data class Interpretacion(
      * que distinguir entre "el viernes" y el día de hoy puesto por defecto.
      */
     val fechaDicha: Boolean,
+    /** Igual con la hora: "cancela lo de las diez" busca por la hora. */
+    val horaDicha: Boolean,
     val dictado: String,
     val confianza: Confianza,
 )
@@ -102,7 +104,16 @@ object Interprete {
 
     private val N: String by lazy { "\\d{1,2}|" + NUMEROS.keys.joinToString("|") }
 
-    fun interpretar(dictado: String, ahora: LocalDateTime = LocalDateTime.now()): Interpretacion {
+    /**
+     * [soloCrear] salta la detección de "cancelar". Sirve para cuando una
+     * frase se tomó por cancelación, no encajó con nada y el usuario pide
+     * apuntarla tal cual.
+     */
+    fun interpretar(
+        dictado: String,
+        ahora: LocalDateTime = LocalDateTime.now(),
+        soloCrear: Boolean = false,
+    ): Interpretacion {
         val original = dictado.trim()
         val texto = normalizar(original)
 
@@ -124,16 +135,35 @@ object Interprete {
             return m
         }
 
-        // Qué se pide. El verbo puede ir delante ("cancela la cena del
-        // viernes") o detrás ("lo del finde, cancélalo"), que es como sale al
-        // hablar. Al final solo cuenta si lleva pronombre pegado —"cancélalo",
-        // "bórralo"—, porque así no hay duda de que es una orden: un "para
-        // cancelar el contrato" en mitad de un título no la dispara.
-        val VERBOS = "cancela|borra|elimina|quita|anula|suprime"
-        val accion = if (
-            buscar("""^\s*(?:nebula\s*[,.]?\s*)?(?:$VERBOS)(?:me|lo|la)?\b""") != null ||
-            buscar("""\b(?:$VERBOS)(?:me)?(?:lo|la)\b""") != null
-        ) Accion.BORRAR else Accion.CREAR
+        // Qué se pide. Al hablar, cancelar sale de muchas formas: "cancela la
+        // cena", "oye, quiero cancelar la cena", "lo del finde, cancélalo",
+        // "ya no voy a la cena", "me han cancelado la cena". Lo que no cuenta
+        // es el verbo metido en una tarea —"recuérdame anular la tarjeta",
+        // "reunión para cancelar el contrato"—: eso hay que apuntarlo.
+        val muletillas = """(?:nebula|nevula|oye|eh|hola|vale|venga|bueno|por\s+favor|""" +
+            """quiero|quisiera|necesito|puedes|podrias|me\s+puedes|me\s+podrias|""" +
+            """haz\s+el\s+favor\s+de|que|y)"""
+        val raices = """(?:cancel|borr|elimin|quit|anul)"""
+        val imperativo = """$raices(?:a|ame|alo|ala|amelo|amela|e|es)|suprim(?:e|elo|ela)|cancelar"""
+        // El infinitivo solo cuenta detrás de una muletilla ("quiero borrar").
+        // Suelto al principio suele ser una tarea ("borrar las fotos el
+        // sábado"), salvo "cancelar", que va en la regla anterior.
+        val infinitivo = """$raices(?:ar|arlo|arla|arme)|suprim(?:ir|irlo|irla)"""
+        val reglasBorrar = listOf(
+            """^\s*(?:$muletillas\s*[,.]?\s*)*(?:$imperativo)\b""",
+            """^\s*(?:$muletillas\s*[,.]?\s*)+(?:$infinitivo)\b""",
+            // Con pronombre pegado vale en cualquier sitio: "cancélalo".
+            """\b$raices(?:alo|ala|amelo|amela|arlo|arla)\b|\bsuprim(?:elo|ela|irlo|irla)\b""",
+            // La noticia, sin orden: también quiere decir "quítalo".
+            """\bya\s+no\s+(?:voy|vamos|va|van|hay|tengo|tenemos|quedamos|quedo)\b""",
+            """\b(?:me\s+|nos\s+|se\s+|lo\s+|la\s+)*(?:ha|han|has)\s+(?:cancelado|anulado|suspendido)\b""",
+            """\bse\s+(?:cancela|anula|suspende)\b""",
+            """\b(?:queda|quedan|esta|estan)\s+(?:cancelad|anulad|suspendid)[oa]s?\b""",
+        )
+        // Se pasan todas, no solo hasta la primera que acierte: así cada trozo
+        // de la orden sale del texto y no se cuela en lo que hay que buscar.
+        val aciertos = if (soloCrear) 0 else reglasBorrar.count { buscar(it) != null }
+        val accion = if (aciertos > 0) Accion.BORRAR else Accion.CREAR
 
         val hoy = ahora.toLocalDate()
         var fecha: LocalDate? = null
@@ -290,7 +320,7 @@ object Interprete {
         // 6b. El fin de semana. Se toma el sábado como referencia; al buscar,
         //     un día de margen hace que el domingo también valga.
         if (fecha == null) {
-            val mFinde = buscar("""\b(?:este\s+|el\s+|los\s+)?""" +
+            val mFinde = buscar("""\b(?:este\s+|el\s+|del\s+|los\s+)?""" +
                 """(?:finde|fin\s+de\s+semana)(?:\s+que\s+viene|\s+proximo)?\b""")
             if (mFinde != null) {
                 var saltos = (DayOfWeek.SATURDAY.value - hoy.dayOfWeek.value + 7) % 7
@@ -320,6 +350,7 @@ object Interprete {
         // --- Resolución --------------------------------------------------
         val todoElDia = hora == null
         val fechaDicha = fecha != null
+        val horaDicha = hora != null
 
         if (fecha == null) {
             fecha = if (hora != null) {
@@ -368,7 +399,7 @@ object Interprete {
         // También por detrás: "la cena del viernes" se queda en "la cena del"
         // cuando la regla del día de la semana se lleva su parte.
         titulo = titulo
-            .replace(Regex("^(?:de|del|el|la|a|al|en|que|para|por|un|una)\\s+", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("^(?:de|del|el|la|lo|los|las|a|al|en|que|para|por|un|una)\\s+", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\s+(?:de|del|el|la|los|las|a|al|en|que|para|por|con|y)$", RegexOption.IGNORE_CASE), "")
             .trim(' ', ',', ';', '.')
 
@@ -393,6 +424,7 @@ object Interprete {
             avisos = avisos ?: if (todoElDia) listOf(1440, 0) else listOf(1440, 60, 0),
             duracionMin = duracionMin,
             fechaDicha = fechaDicha,
+            horaDicha = horaDicha,
             dictado = original,
             confianza = confianza,
         )

@@ -15,6 +15,7 @@ import com.calendarremember.MainActivity
 import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.Evento
 import com.calendarremember.ui.DialogoCancelar
+import com.calendarremember.ui.DialogoNoEncontrado
 import com.calendarremember.ui.TemaNebula
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -34,7 +35,11 @@ class VozActivity : ComponentActivity() {
 
     private val ES = Locale("es", "ES")
 
+    /** Lo que se enseña para confirmar un borrado. */
     private var candidatos by mutableStateOf<List<Evento>>(emptyList())
+
+    /** Una cancelación que no encajó con nada: se ofrece apuntarla. */
+    private var sinCoincidencia by mutableStateOf<Interpretacion?>(null)
 
     private val dictado = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -73,6 +78,17 @@ class VozActivity : ComponentActivity() {
                         alCerrar = { finish() },
                     )
                 }
+                sinCoincidencia?.let { leido ->
+                    DialogoNoEncontrado(
+                        buscado = leido.titulo,
+                        dictado = leido.dictado,
+                        alApuntar = {
+                            sinCoincidencia = null
+                            apuntar(Interprete.interpretar(leido.dictado, soloCrear = true))
+                        },
+                        alCerrar = { finish() },
+                    )
+                }
             }
         }
 
@@ -82,7 +98,7 @@ class VozActivity : ComponentActivity() {
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
             )
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Dime qué apunto")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Dime qué apunto o qué cancelo")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
 
@@ -127,7 +143,9 @@ class VozActivity : ComponentActivity() {
      * lo enseña. Si hay varios parecidos, los muestra todos para elegir.
      */
     private fun cancelar(leido: Interpretacion) {
-        if (leido.titulo.isBlank()) {
+        // Sin nombre, sin día y sin hora no hay nada por lo que buscar. Pero
+        // "cancela lo de mañana" no tiene nombre y sí día: ese sí se busca.
+        if (leido.titulo.isBlank() && !leido.fechaDicha && !leido.horaDicha) {
             avisar("Dime qué cancelo")
             finish()
             return
@@ -138,11 +156,11 @@ class VozActivity : ComponentActivity() {
             fecha = if (leido.fechaDicha) leido.inicio.toLocalDate() else null,
             eventos = Almacen.eventos.value,
             ahora = LocalDateTime.now(),
+            hora = if (leido.horaDicha) leido.inicio.toLocalTime() else null,
         )
 
         if (encontrados.isEmpty()) {
-            avisar("No he encontrado nada parecido a «${leido.titulo}»")
-            finish()
+            sinCoincidencia = leido
             return
         }
 

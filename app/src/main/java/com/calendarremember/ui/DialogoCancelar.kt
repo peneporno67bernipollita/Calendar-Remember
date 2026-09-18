@@ -122,6 +122,79 @@ private fun FichaEvento(evento: Evento, alPulsar: () -> Unit) {
             )
         }
         Spacer(Modifier.width(8.dp))
-        Text("Cancelar", color = Neon.Rojo, fontSize = 14.sp)
+        // "Borrar" y no "Cancelar": en un diálogo, "Cancelar" se lee como
+        // "cerrar sin hacer nada", justo lo contrario de lo que hace.
+        Text("Borrar", color = Neon.Rojo, fontSize = 14.sp)
+    }
+}
+
+/**
+ * Cuando una frase suena a cancelar pero no encaja con ningún evento.
+ *
+ * Puede que no hubiera nada que cancelar, o puede que fuera una tarea que
+ * menciona el verbo ("necesito anular la tarjeta el lunes"). Por eso, además
+ * de decirlo, ofrece apuntarla tal cual: así nada de lo dictado se pierde.
+ */
+@Composable
+fun DialogoNoEncontrado(
+    buscado: String,
+    dictado: String,
+    alApuntar: () -> Unit,
+    alCerrar: () -> Unit,
+) {
+    Dialog(onDismissRequest = alCerrar) {
+        Surface(
+            color = Neon.Superficie,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.dp, Neon.Borde),
+        ) {
+            Column(
+                Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "No encuentro nada que cancelar",
+                    color = Neon.Texto,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = if (buscado.isNotBlank())
+                        "Ningún evento se parece a «$buscado»."
+                    else
+                        "No sé a qué evento te refieres.",
+                    color = Neon.Tenue,
+                    fontSize = 14.sp,
+                )
+                Text(
+                    text = "¿Querías apuntarlo? «$dictado»",
+                    color = Neon.Tenue,
+                    fontSize = 13.sp,
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Text(
+                        text = "Nada",
+                        color = Neon.Tenue,
+                        fontSize = 15.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(onClick = alCerrar)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Apuntarlo",
+                        color = Neon.Cian,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Neon.Cian.copy(alpha = 0.12f))
+                            .clickable(onClick = alApuntar)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
+            }
+        }
     }
 }
