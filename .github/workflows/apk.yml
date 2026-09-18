@@ -58,6 +58,13 @@ jobs:
           git rm -rf --cached . > /dev/null 2>&1 || true
           cp /tmp/reg/salida.txt /tmp/reg/pruebas.xml .
           git add -f salida.txt pruebas.xml
+          # El APK va tambien aqui: con el repositorio privado, las descargas
+          # de Releases exigen sesion en la web, pero esta rama se baja con
+          # git y las credenciales de siempre.
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk Nebula.apk
+            git add -f Nebula.apk
+          fi
           git commit -q -m "Registro de ${GITHUB_SHA:0:7}"
           git push -f -q origin registro-ci
 
