@@ -75,6 +75,11 @@ class VozActivity : ComponentActivity() {
     private var esperando: Respuesta? = null
     /** Preguntas seguidas: a la tercera sin aclararse, se deja. */
     private var rondas = 0
+    /**
+     * El reconocedor está escuchando. Lo que avise cuando ya no (un error
+     * tardío tras tocar una opción en pantalla) no cuenta.
+     */
+    private var oyendo = false
 
     private var voz: TextToSpeech? = null
     private var vozLista = false
@@ -222,6 +227,7 @@ class VozActivity : ComponentActivity() {
 
     private fun escuchar() {
         runCatching { reconocedor?.destroy() }
+        oyendo = true
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
@@ -261,6 +267,8 @@ class VozActivity : ComponentActivity() {
         }
 
         override fun onResults(results: Bundle?) {
+            if (!oyendo) return
+            oyendo = false
             val texto = results
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim()
@@ -272,6 +280,8 @@ class VozActivity : ComponentActivity() {
         }
 
         override fun onError(error: Int) {
+            if (!oyendo) return
+            oyendo = false
             // Esperando una respuesta, callarse también es contestar.
             if (esperando != null && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                 sinRespuesta()
@@ -325,6 +335,7 @@ class VozActivity : ComponentActivity() {
 
     private fun dejarDeEsperar() {
         esperando = null
+        oyendo = false
         runCatching { reconocedor?.cancel() }
         voz?.stop()
     }
