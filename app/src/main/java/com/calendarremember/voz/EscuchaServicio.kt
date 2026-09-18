@@ -43,7 +43,7 @@ import java.util.concurrent.Executors
  *
  * Cómo distingue "Nébula" de todo lo demás está medido, no supuesto. El
  * modelo no conoce la palabra, pero se le da a elegir entre "nebulosa" (que
- * es como la oye) y 121 palabras corrientes: así "me mola" o "me gusta" se
+ * es como la oye) y 120 palabras corrientes: así "me mola" o "me gusta" se
  * quedan en lo que son en vez de colarse como "nebulosa". Además tiene que
  * mantenerse dos trozos seguidos de un cuarto de segundo, porque lo que el
  * motor dice de pasada cambia enseguida. Con audio de prueba: 12 de 12
@@ -334,6 +334,10 @@ class EscuchaServicio : Service() {
      */
     private fun alOirLaPalabra() {
         pausado = true
+        // Por si entre la detección y este momento algo (la pantalla que se
+        // enciende de nuevo, por ejemplo) volvió a arrancar la escucha: el
+        // micrófono tiene que quedar libre para el dictado.
+        actualizar()
         principal.removeCallbacks(reanudarSiempre)
         principal.postDelayed(reanudarSiempre, REANUDAR_SIEMPRE_TRAS_MS)
 
@@ -361,6 +365,7 @@ class EscuchaServicio : Service() {
         val m = modelo ?: return terminarDictado()
         dictando = true
         dictandoAhora = true
+        actualizar()
         pitar()
         Notificaciones.mostrarDictado(this, "Te escucho…", null)
         Thread({

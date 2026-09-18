@@ -50,7 +50,7 @@ tener el círculo.
 Está medido, no supuesto. El motor sin conexión no conoce la palabra; la oye
 como «nebulosa». Si solo pudiera elegir entre «nebulosa» y nada, cualquier
 cosa parecida («me mola», «me gusta») caería en «nebulosa», y con la misma
-confianza que un «Nébula» de verdad. Por eso compite con 121 palabras
+confianza que un «Nébula» de verdad. Por eso compite con 120 palabras
 corrientes, y además tiene que mantenerse medio segundo. Con audio de prueba:
 
 | | Antes | Ahora |
