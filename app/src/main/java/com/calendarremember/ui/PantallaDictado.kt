@@ -48,13 +48,21 @@ private val ES = Locale("es", "ES")
 
 /** En qué punto está el dictado. */
 sealed interface EstadoDictado {
-    /** Escuchando. [nivel] es el volumen de la voz, de 0 a 1, para el pulso. */
-    data class Escuchando(val parcial: String, val nivel: Float) : EstadoDictado
+    /**
+     * Escuchando. [nivel] es el volumen de la voz, de 0 a 1, para el pulso.
+     * [pregunta]: lo que Nébula acaba de preguntar, si se escucha la respuesta.
+     */
+    data class Escuchando(val parcial: String, val nivel: Float, val pregunta: String? = null) : EstadoDictado
     data class Hecho(val mensaje: String, val bien: Boolean) : EstadoDictado
-    /** Varios eventos encajan por igual: toca decir cuál. [boton]: "Borrar", "Cambiar". */
-    data class Elegir(val pregunta: String, val candidatos: List<Evento>, val boton: String) : EstadoDictado
-    /** Sonaba a una orden sobre un evento, pero no encaja con ninguno. */
-    data class NoEncontrado(val mensaje: String, val dictado: String) : EstadoDictado
+    /**
+     * Varios eventos encajan por igual: toca decir cuál, hablando o tocando.
+     * [boton]: "Borrar", "Cambiar". [oyendo]: lo que se va oyendo de la respuesta.
+     */
+    data class Elegir(
+        val pregunta: String, val candidatos: List<Evento>, val boton: String, val oyendo: String = "",
+    ) : EstadoDictado
+    /** Sonaba a una orden sobre un evento, pero no encaja con ninguno. "¿Lo apunto?" */
+    data class NoEncontrado(val mensaje: String, val dictado: String, val oyendo: String = "") : EstadoDictado
 }
 
 /**
@@ -91,6 +99,16 @@ fun PantallaDictado(
                     Pulso(Neon.Cian, estado.nivel) {
                         Icon(Icons.Default.Mic, null, tint = Neon.Cian, modifier = Modifier.size(40.dp))
                     }
+                    // Contestando a una pregunta de Nébula, la pregunta sigue a la vista.
+                    estado.pregunta?.let {
+                        Text(
+                            text = it,
+                            color = Neon.Cian,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                     Text(
                         text = estado.parcial.ifBlank { "Te escucho…" },
                         color = Neon.Texto,
@@ -98,7 +116,7 @@ fun PantallaDictado(
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        text = "Di qué apunto o qué cancelo",
+                        text = if (estado.pregunta != null) "Contéstame" else "Di qué apunto, cambio o cancelo",
                         color = Neon.Tenue,
                         fontSize = 14.sp,
                     )
@@ -132,6 +150,7 @@ fun PantallaDictado(
                             FichaElegir(evento, estado.boton) { alElegir(evento) }
                         }
                     }
+                    Oyendo(estado.oyendo, "Dime cuál («el primero», «el de las diez») o toca uno")
                 }
 
                 is EstadoDictado.NoEncontrado -> {
@@ -145,7 +164,7 @@ fun PantallaDictado(
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        text = "¿Querías apuntarlo? «${estado.dictado}»",
+                        text = "¿Lo apunto? «${estado.dictado}»",
                         color = Neon.Tenue,
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
@@ -154,9 +173,25 @@ fun PantallaDictado(
                         Boton("Nada", Neon.Tenue, Color.Transparent, alCerrar)
                         Boton("Apuntarlo", Neon.Cian, Neon.Cian.copy(alpha = 0.12f), alApuntar)
                     }
+                    Oyendo(estado.oyendo, "Dime «sí» o «no»")
                 }
             }
         }
+    }
+}
+
+/** Mientras se espera la respuesta hablada: lo que se va oyendo, o cómo contestar. */
+@Composable
+private fun Oyendo(oyendo: String, pista: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.Mic, null, tint = Neon.Cian, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = oyendo.ifBlank { pista },
+            color = if (oyendo.isBlank()) Neon.Tenue else Neon.Texto,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

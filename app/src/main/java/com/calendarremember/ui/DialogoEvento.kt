@@ -66,7 +66,7 @@ private val OPCIONES_AVISO = listOf(
 fun DialogoEvento(
     evento: Evento?,
     diaSugerido: LocalDate?,
-    /** Un evento nuevo ya relleno (un plan de WhatsApp) que falta guardar. */
+    /** Un evento nuevo ya relleno (un mensaje compartido) que falta guardar. */
     borrador: Evento? = null,
     alGuardar: (Evento) -> Unit,
     alBorrar: ((String) -> Unit)?,

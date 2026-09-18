@@ -75,4 +75,22 @@ object Preferencias {
     }
 
     private const val ESCUCHAR_APAGADA = "escuchar_apagada"
+
+    /** El evento del que se acaba de hablar, si fue hace menos de [vigencia] ms. */
+    fun enContexto(contexto: Context, vigencia: Long): String? {
+        val p = prefs(contexto)
+        val cuando = p.getLong(CONTEXTO_CUANDO, 0L)
+        if (System.currentTimeMillis() - cuando > vigencia) return null
+        return p.getString(CONTEXTO_ID, null)
+    }
+
+    fun ponerEnContexto(contexto: Context, id: String?) {
+        prefs(contexto).edit()
+            .putString(CONTEXTO_ID, id)
+            .putLong(CONTEXTO_CUANDO, System.currentTimeMillis())
+            .apply()
+    }
+
+    private const val CONTEXTO_ID = "contexto_id"
+    private const val CONTEXTO_CUANDO = "contexto_cuando"
 }

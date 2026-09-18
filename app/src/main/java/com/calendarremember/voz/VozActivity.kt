@@ -68,9 +68,18 @@ class VozActivity : ComponentActivity() {
     private var dictado = ""
     /** La orden a la espera de que se elija entre varios eventos. */
     private var pendiente: Interpretacion? = null
+    /**
+     * La pregunta que Nébula acaba de hacer ("¿Qué apunto para mañana?",
+     * "¿Cuál borro?"): lo próximo que se oiga es su respuesta.
+     */
+    private var esperando: Respuesta? = null
+    /** Preguntas seguidas: a la tercera sin aclararse, se deja. */
+    private var rondas = 0
 
     private var voz: TextToSpeech? = null
     private var vozLista = false
+    /** Lo que espera a que la voz esté lista para hablar. */
+    private var alEstarLaVozLista: (() -> Unit)? = null
     private var desdePalabra = false
     /** Empieza a escuchar la primera vez que queda a la vista, no antes. */
     private var arrancada = false
@@ -80,7 +89,7 @@ class VozActivity : ComponentActivity() {
     private val pedirMicro = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { concedido ->
-        if (concedido) escuchar() else terminar("Necesito permiso para usar el micrófono", false, false)
+        if (concedido) saludarYEscuchar() else terminar("Necesito permiso para usar el micrófono", false, false)
     }
 
     /** Para móviles sin el servicio de reconocimiento: el diálogo del sistema. */
@@ -130,6 +139,10 @@ class VozActivity : ComponentActivity() {
         voz = TextToSpeech(this) { resultado ->
             vozLista = resultado == TextToSpeech.SUCCESS
             if (vozLista) voz?.language = ES
+            principal.post {
+                alEstarLaVozLista?.invoke()
+                alEstarLaVozLista = null
+            }
         }
 
         setContent {
@@ -139,6 +152,7 @@ class VozActivity : ComponentActivity() {
                     alCerrar = { finish() },
                     alElegir = { evento -> elegir(evento) },
                     alApuntar = {
+                        dejarDeEsperar()
                         mostrar(Ejecutor.ejecutar(Interprete.interpretar(dictado, soloCrear = true), agenda), false)
                     },
                 )
@@ -157,7 +171,7 @@ class VozActivity : ComponentActivity() {
         }
         when {
             !SpeechRecognizer.isRecognitionAvailable(this) -> dictadoConElSistema()
-            tienePermisoMicro() -> principal.postDelayed({ escuchar() }, 250)
+            tienePermisoMicro() -> saludarYEscuchar()
             else -> pedirMicro.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
@@ -179,7 +193,35 @@ class VozActivity : ComponentActivity() {
 
     // --- Escuchar ---------------------------------------------------------
 
+    /**
+     * "Te escucho", en voz alta, y a escuchar: así se sabe cuándo se puede
+     * empezar a hablar, sin tener que calcularlo. Si la voz tarda en
+     * arrancar, se escucha igual sin decir nada.
+     */
+    private fun saludarYEscuchar() {
+        var hecho = false
+        val empezar = {
+            if (!hecho) {
+                hecho = true
+                decir("Te escucho") { escuchar() }
+            }
+        }
+        if (vozLista) {
+            empezar()
+        } else {
+            alEstarLaVozLista = empezar
+            principal.postDelayed({
+                if (!hecho) {
+                    hecho = true
+                    alEstarLaVozLista = null
+                    escuchar()
+                }
+            }, 2_000)
+        }
+    }
+
     private fun escuchar() {
+        runCatching { reconocedor?.destroy() }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
@@ -209,18 +251,32 @@ class VozActivity : ComponentActivity() {
             val texto = partialResults
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull().orEmpty()
-            val actual = estado as? EstadoDictado.Escuchando ?: return
-            if (texto.isNotBlank()) estado = actual.copy(parcial = texto)
+            if (texto.isBlank()) return
+            estado = when (val actual = estado) {
+                is EstadoDictado.Escuchando -> actual.copy(parcial = texto)
+                is EstadoDictado.Elegir -> actual.copy(oyendo = texto)
+                is EstadoDictado.NoEncontrado -> actual.copy(oyendo = texto)
+                else -> actual
+            }
         }
 
         override fun onResults(results: Bundle?) {
             val texto = results
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim()
-            if (texto.isNullOrEmpty()) terminar("No te he oído", false, false) else atender(texto)
+            when {
+                !texto.isNullOrEmpty() -> atender(texto)
+                esperando != null -> sinRespuesta()
+                else -> terminar("No te he oído", false, false)
+            }
         }
 
         override fun onError(error: Int) {
+            // Esperando una respuesta, callarse también es contestar.
+            if (esperando != null && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                sinRespuesta()
+                return
+            }
             terminar(
                 when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
@@ -248,16 +304,50 @@ class VozActivity : ComponentActivity() {
     // --- Hacer lo que se ha pedido -----------------------------------------
 
     private fun atender(texto: String) {
+        // La respuesta a lo que Nébula acaba de preguntar.
+        esperando?.let { pregunta ->
+            esperando = null
+            mostrar(Ejecutor.responder(pregunta, texto, agenda), true)
+            return
+        }
         dictado = texto
         val leido = Interprete.interpretar(texto)
         // Una pregunta se contesta siempre en voz alta: es a lo que se pregunta.
         mostrar(Ejecutor.ejecutar(leido, agenda), leido.accion == Accion.CONSULTAR)
     }
 
+    /** No se contestó: el Ejecutor decide qué hacer con el silencio. */
+    private fun sinRespuesta() {
+        val pregunta = esperando ?: return
+        esperando = null
+        mostrar(Ejecutor.responder(pregunta, "", agenda), true)
+    }
+
+    private fun dejarDeEsperar() {
+        esperando = null
+        runCatching { reconocedor?.cancel() }
+        voz?.stop()
+    }
+
     private fun elegir(evento: Evento) {
         val orden = pendiente ?: return finish()
         pendiente = null
+        dejarDeEsperar()
         mostrar(Ejecutor.aplicar(orden, evento, agenda), false)
+    }
+
+    /**
+     * Dice la pregunta en voz alta y escucha la respuesta, como en una
+     * conversación. A la tercera pregunta seguida se deja estar.
+     */
+    private fun preguntar(pregunta: Respuesta, enVoz: String) {
+        rondas++
+        if (rondas > 3) {
+            mostrar(Ejecutor.responder(pregunta, "", agenda), true)
+            return
+        }
+        esperando = pregunta
+        decir(enVoz) { if (esperando === pregunta) escuchar() }
     }
 
     private fun mostrar(respuesta: Respuesta, esPregunta: Boolean) {
@@ -281,13 +371,26 @@ class VozActivity : ComponentActivity() {
             }
             is Respuesta.Elegir -> {
                 pendiente = respuesta.leido
-                val boton = if (respuesta.leido.accion == Accion.MOVER) "Cambiar" else "Borrar"
+                val boton = when (respuesta.leido.accion) {
+                    Accion.MOVER, Accion.EDITAR -> "Cambiar"
+                    else -> "Borrar"
+                }
                 estado = EstadoDictado.Elegir(respuesta.mensaje, respuesta.candidatos, boton)
-                if (desdePalabra) decir(respuesta.mensaje) {}
+                // En voz, las opciones: "¿Cuál borro? La cena con Marta, el
+                // sábado, o la cena con Luis, el viernes 25."
+                val ahora = java.time.LocalDateTime.now()
+                val opciones = respuesta.candidatos.take(3).joinToString(", o ") {
+                    "${it.titulo}, ${Ejecutor.cuando(it, ahora)}"
+                }
+                preguntar(respuesta, "${respuesta.mensaje} $opciones.")
             }
             is Respuesta.NoEncontrada -> {
                 estado = EstadoDictado.NoEncontrado(respuesta.mensaje, dictado)
-                if (desdePalabra) decir(respuesta.mensaje) {}
+                preguntar(respuesta, "${respuesta.mensaje} ¿Lo apunto?")
+            }
+            is Respuesta.Preguntar -> {
+                estado = EstadoDictado.Escuchando("", 0f, respuesta.mensaje)
+                preguntar(respuesta, respuesta.mensaje)
             }
         }
     }
@@ -310,13 +413,23 @@ class VozActivity : ComponentActivity() {
     private fun decir(texto: String, alAcabar: () -> Unit) {
         val motor = voz ?: return alAcabar()
         if (!vozLista) return alAcabar()
+        // Una sola vez, pase lo que pase: si la voz se cuelga, se sigue igual
+        // pasado lo que tardaría en decirlo.
+        var hecho = false
+        val acabar = {
+            if (!hecho) {
+                hecho = true
+                alAcabar()
+            }
+        }
         motor.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) { principal.post { alAcabar() } }
+            override fun onDone(utteranceId: String?) { principal.post { acabar() } }
             @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) { principal.post { alAcabar() } }
+            override fun onError(utteranceId: String?) { principal.post { acabar() } }
         })
         motor.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "respuesta")
+        principal.postDelayed({ acabar() }, maxOf(3_000L, texto.length * 110L))
     }
 
     private fun bloqueado(): Boolean =

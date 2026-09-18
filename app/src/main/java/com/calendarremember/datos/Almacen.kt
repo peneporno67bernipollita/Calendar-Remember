@@ -95,7 +95,12 @@ object Almacen {
 
     fun porId(id: String): Evento? = _eventos.value.firstOrNull { it.id == id }
 
-    /** El almacén visto como la agenda sobre la que trabajan las órdenes de voz. */
+    /**
+     * El almacén visto como la agenda sobre la que trabajan las órdenes de voz.
+     * El evento del que se está hablando se guarda en los ajustes: así
+     * "cancélalo" funciona también si se dice en otra llamada a Nébula, un
+     * rato después, mientras no pasen diez minutos.
+     */
     fun comoAgenda(contexto: Context): com.calendarremember.voz.Agenda =
         object : com.calendarremember.voz.Agenda {
             override val eventos: List<Evento> get() = _eventos.value
@@ -103,7 +108,12 @@ object Almacen {
             override fun borrar(id: String) = borrar(contexto, id)
             override fun guardarVarios(eventos: List<Evento>) = guardarVarios(contexto, eventos)
             override fun borrarVarios(ids: List<String>) = borrarVarios(contexto, ids)
+            override val enContexto: Evento?
+                get() = Preferencias.enContexto(contexto, CONTEXTO_MS)?.let { porId(it) }
+            override fun ponerEnContexto(evento: Evento?) = Preferencias.ponerEnContexto(contexto, evento?.id)
         }
+
+    private const val CONTEXTO_MS = 10 * 60_000L
 
     /** Eventos de hoy en adelante, que es lo que mira el widget. Un viaje en curso, también. */
     fun proximos(limite: Int = 20): List<Evento> {

@@ -47,8 +47,9 @@ object Notificaciones {
     private const val ID_REACTIVAR = 7003
 
     const val ACCION_DESCARTAR = "com.calendarremember.DESCARTAR"
-    const val ACCION_APUNTAR_PLAN = "com.calendarremember.APUNTAR_PLAN"
-    private const val CANAL_PLANES = "planes"
+    // Hubo un canal para los planes de WhatsApp; MIUI no deja darle a la app
+    // el acceso a las notificaciones que necesitaba, y se quitó.
+    private const val CANAL_PLANES_VIEJO = "planes"
 
     private val FMT_HORA = DateTimeFormatter.ofPattern("HH:mm")
     private val ES = Locale("es", "ES")
@@ -58,6 +59,7 @@ object Notificaciones {
 
         gestor.deleteNotificationChannel(CANAL_ALARMAS_VIEJO)
         gestor.deleteNotificationChannel(CANAL_AGENDA_VIEJO)
+        gestor.deleteNotificationChannel(CANAL_PLANES_VIEJO)
 
         // Los avisos de los días previos: se oyen, pero no interrumpen.
         gestor.createNotificationChannel(
@@ -90,16 +92,6 @@ object Notificaciones {
                 setSound(null, null)
                 enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            }
-        )
-
-        // Los planes que llegan por WhatsApp: se ven y suenan como un
-        // mensaje más, sin saltar encima de nada.
-        gestor.createNotificationChannel(
-            NotificationChannel(
-                CANAL_PLANES, "Planes de WhatsApp", NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                description = "Cuando te proponen un plan con día u hora, para apuntarlo de un toque."
             }
         )
 
@@ -374,67 +366,6 @@ object Notificaciones {
             .setContentIntent(abrirApp(contexto, null))
             .build()
         gestor.notify(ID_DICTADO, notificacion)
-    }
-
-    /**
-     * Un plan de WhatsApp: "¿Lo apunto?", con el mensaje entero y dos
-     * botones. "Apuntar" lo guarda sin abrir nada; tocar el aviso (o
-     * "Cambiar") lo abre en el editor, ya relleno, por si hay que retocarlo.
-     */
-    fun ofrecerPlan(contexto: Context, plan: Evento) {
-        val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
-        crearCanales(contexto)
-        val id = plan.id.hashCode()
-        val json = plan.aJson().toString()
-
-        val apuntar = PendingIntent.getBroadcast(
-            contexto, id,
-            Intent(contexto, ReceptorAviso::class.java).apply {
-                action = ACCION_APUNTAR_PLAN
-                putExtra("plan", json)
-                data = Uri.parse("calendarremember://plan/${plan.id}")
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val editar = PendingIntent.getActivity(
-            contexto, id,
-            Intent(contexto, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(MainActivity.BORRADOR, json)
-                data = Uri.parse("calendarremember://editar/${plan.id}")
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val cuando = Etiquetas.corta(plan, LocalDate.now())
-        val notificacion = NotificationCompat.Builder(contexto, CANAL_PLANES)
-            .setSmallIcon(R.drawable.ic_aviso)
-            .setContentTitle("¿Lo apunto? ${plan.titulo}")
-            .setContentText(cuando)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$cuando\n${plan.notas.orEmpty()}"))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setCategory(NotificationCompat.CATEGORY_EVENT)
-            .setAutoCancel(true)
-            .setContentIntent(editar)
-            .addAction(0, "Apuntar", apuntar)
-            .addAction(0, "Cambiar", editar)
-            .build()
-        gestor.notify(id, notificacion)
-    }
-
-    /** Tras "Apuntar": lo confirma en el mismo sitio y se quita solo. */
-    fun planApuntado(contexto: Context, plan: Evento) {
-        val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
-        val notificacion = NotificationCompat.Builder(contexto, CANAL_PLANES)
-            .setSmallIcon(R.drawable.ic_aviso)
-            .setContentTitle("Apuntado: ${plan.titulo}")
-            .setContentText(Etiquetas.corta(plan, LocalDate.now()))
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOnlyAlertOnce(true)
-            .setAutoCancel(true)
-            .setTimeoutAfter(5_000)
-            .setContentIntent(abrirApp(contexto, plan.id))
-            .build()
-        gestor.notify(plan.id.hashCode(), notificacion)
     }
 
     /**

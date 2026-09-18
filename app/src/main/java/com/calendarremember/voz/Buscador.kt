@@ -28,7 +28,7 @@ object Buscador {
         "voy", "vas", "va", "ir", "tengo", "tenia", "tiene", "hay", "es",
         "eso", "esa", "ese", "esto", "esta", "este", "cosa", "plan", "nada",
         "todo", "evento", "eventos", "recordatorio", "recordatorios", "aviso",
-        "avisos", "nebula", "hora", "dia", "fecha", "todos", "todas", "siempre",
+        "avisos", "nebula", "hora", "dia", "fecha", "todos", "todas", "siempre", "mejor", "otro", "otra",
     )
 
     data class Candidato(val evento: Evento, val puntos: Int)
@@ -114,7 +114,8 @@ object Buscador {
         return a.take(raiz) == b.take(raiz)
     }
 
-    private fun palabras(texto: String): List<String> =
+    /** Las palabras que distinguen un evento: sin artículos ni palabras vacías. */
+    fun palabras(texto: String): List<String> =
         normalizar(texto)
             .split(Regex("[^\\p{L}\\p{N}]+"))
             .filter { it.length > 2 && it !in VACIAS }

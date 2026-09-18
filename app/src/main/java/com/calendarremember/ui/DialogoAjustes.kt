@@ -25,8 +25,6 @@ import androidx.compose.ui.window.Dialog
 
 @Composable
 fun DialogoAjustes(
-    planesActivos: Boolean,
-    alPlanes: () -> Unit,
     escuchaActiva: Boolean,
     alEscucha: () -> Unit,
     agendaActiva: Boolean,
@@ -58,16 +56,6 @@ fun DialogoAjustes(
                     else
                         "Toca para prepararla. Necesita unos permisos.",
                     alPulsar = alEscucha,
-                )
-                Opcion(
-                    titulo = if (planesActivos) "Planes de WhatsApp: activados"
-                        else "Planes de WhatsApp: desactivados",
-                    detalle = if (planesActivos)
-                        "Si te proponen algo con día u hora, te ofrezco apuntarlo. Toca para quitarlo."
-                    else
-                        "Toca y activa Nébula en «Acceso a notificaciones»: cuando te propongan un plan, " +
-                            "te ofrezco apuntarlo de un toque. Nada sale del móvil.",
-                    alPulsar = alPlanes,
                 )
                 Opcion(
                     titulo = if (agendaActiva) "Agenda en el bloqueo: activada"

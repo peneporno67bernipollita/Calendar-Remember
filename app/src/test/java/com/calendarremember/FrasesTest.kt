@@ -3,14 +3,13 @@ package com.calendarremember
 import com.calendarremember.voz.Accion
 import com.calendarremember.voz.Interpretacion
 import com.calendarremember.voz.Interprete
-import com.calendarremember.voz.Planes
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
 
 /**
  * Las frases de los barridos grandes, cada una con lo que tiene que salir.
- * Están en test/resources (frases.txt y planes.txt), revisadas a mano: si
+ * Están en test/resources/frases.txt, revisadas a mano: si
  * una regla nueva cambia lo que se entiende de cualquiera de ellas, esta
  * prueba lo dice, con la frase, lo que salía y lo que sale ahora.
  *
@@ -43,9 +42,15 @@ class FrasesTest {
             r.nuevoHasta?.let { add("→hasta $it") }
             r.alargarMin?.let { add("alarga $it") }
             r.consulta?.let { add("$it ${r.desde}..${r.hasta}") }
+            r.nuevoTitulo?.let { add("→nombre «$it»") }
+            if (r.particiones.size > 1) add("partes ${r.particiones.size}")
+            r.nuevaNota?.let { add("→nota «$it»") }
+            r.nuevoColor?.let { add("→color $it") }
+            r.reemplazo?.let { add("→«${it.first}» por «${it.second}»") }
+            r.nuevosAvisos?.let { add("→avisos $it") }
             if (!r.fechaDicha) add("sin fecha")
         }
-        val accion = when (r.accion) { Accion.CREAR -> "+"; Accion.BORRAR -> "X"; Accion.MOVER -> ">"; Accion.CONSULTAR -> "?" }
+        val accion = when (r.accion) { Accion.CREAR -> "+"; Accion.BORRAR -> "X"; Accion.MOVER -> ">"; Accion.CONSULTAR -> "?"; Accion.EDITAR -> "E" }
         return "$accion [${r.titulo}] $cuando ${extra.joinToString(", ")}".trim()
     }
 
@@ -62,26 +67,5 @@ class FrasesTest {
             fallos.isEmpty(),
         )
         assertTrue("${todas.size} frases", todas.size >= 300)
-    }
-
-    @Test fun losPlanesDeWhatsApp() {
-        val fallos = mutableListOf<String>()
-        val todas = lineas("/planes.txt")
-        for (linea in todas) {
-            val (entrada, esperado) = linea.split("   =>   ", limit = 2)
-            val (quien, grupo, mensaje) = entrada.split("|", limit = 3)
-            val plan = Planes.detectar(mensaje, quien, grupo.ifBlank { null }, ahora)
-            val sale = if (plan == null) "nada" else {
-                val i = plan.inicio
-                val cuando = if (plan.todoElDia) "%02d/%02d todo".format(i.dayOfMonth, i.monthValue)
-                    else "%02d/%02d %02d:%02d".format(i.dayOfMonth, i.monthValue, i.hour, i.minute)
-                "[${plan.titulo}] $cuando" + (plan.hasta?.let { " hasta $it" } ?: "")
-            }
-            if (sale != esperado.trim()) fallos += "«$mensaje»\n      esperado: ${esperado.trim()}\n      sale:     $sale"
-        }
-        assertTrue(
-            "\n${fallos.size} de ${todas.size} mensajes cambian:\n" + fallos.joinToString("\n") { "  - $it" },
-            fallos.isEmpty(),
-        )
     }
 }

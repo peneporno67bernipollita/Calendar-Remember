@@ -537,13 +537,24 @@ class EscuchaServicio : Service() {
         dictando = true
         dictandoAhora = true
         actualizar()
-        pitar()
         Notificaciones.mostrarDictado(this, "Te escucho…", null)
-        Thread({
+        // "Te escucho", en voz alta: así se sabe cuándo empezar a hablar. En
+        // un bolsillo, solo un pitido.
+        if (silencioso || !vozLista) {
+            pitar()
             // Lo justo para que el pitido no se lo coma la grabación.
-            SystemClock.sleep(300)
+            principal.postDelayed({ oir(m) { texto -> atender(texto, silencioso) } }, 300)
+        } else {
+            hablar("Te escucho") { oir(m) { texto -> atender(texto, silencioso) } }
+        }
+    }
+
+    /** Escucha lo que se diga (en su propio hilo) y lo devuelve en el principal. */
+    private fun oir(m: Model, alOir: (String) -> Unit) {
+        mantenerDespiertoAtendiendo(true)
+        Thread({
             val texto = transcribir(m)
-            principal.post { atender(texto, silencioso) }
+            principal.post { alOir(texto) }
         }, "dictado-nebula").start()
     }
 
@@ -592,24 +603,42 @@ class EscuchaServicio : Service() {
         return texto.trim()
     }
 
-    private fun atender(texto: String, silencioso: Boolean) {
-        if (texto.isBlank() && silencioso) {
+    /**
+     * Hace lo que se dijo y lo contesta en voz alta. Si Nébula necesita
+     * preguntar algo ("¿Qué apunto para mañana?", "¿Cuál borro?"), lo
+     * pregunta y escucha la respuesta, como en una conversación; a la tercera
+     * pregunta seguida lo deja estar.
+     */
+    private fun atender(texto: String, silencioso: Boolean, pregunta: Respuesta? = null, rondas: Int = 0) {
+        if (texto.isBlank() && silencioso && pregunta == null) {
             Notificaciones.quitarDictado(this)
             return terminarDictado()
         }
-        val respuesta = if (texto.isBlank()) "No te he oído." else {
-            val leido = Interprete.interpretar(texto)
-            when (val r = Ejecutor.ejecutar(leido, Almacen.comoAgenda(this))) {
-                is Respuesta.Hecha -> r.mensaje
-                // Sin pantalla no se puede elegir de una lista: se dicen los
-                // que compiten para que se repita con más detalle.
-                is Respuesta.Elegir -> "Hay varios parecidos: " +
-                    r.candidatos.take(3).joinToString(" y ") { it.titulo } + ". Dímelo con más detalle."
-                is Respuesta.NoEncontrada -> r.mensaje
-            }
+        val agenda = Almacen.comoAgenda(this)
+        var r: Respuesta = when {
+            pregunta != null -> Ejecutor.responder(pregunta, texto, agenda)
+            texto.isBlank() -> Respuesta.Hecha("No te he oído.", false)
+            else -> Ejecutor.ejecutar(Interprete.interpretar(texto), agenda)
         }
-        Notificaciones.mostrarDictado(this, respuesta, texto.ifBlank { null })
-        hablar(respuesta) { terminarDictado() }
+        val m = modelo
+        if (r !is Respuesta.Hecha && (rondas >= 2 || m == null)) r = Ejecutor.responder(r, "", agenda)
+        val mensaje = when (r) {
+            is Respuesta.Hecha -> r.mensaje
+            // Sin pantalla, las opciones se dicen: "¿Cuál borro? La cena con
+            // Marta, el sábado, o la cena con Luis, el viernes 25."
+            is Respuesta.Elegir -> r.mensaje + " " + r.candidatos.take(3).joinToString(", o ") {
+                "${it.titulo}, ${Ejecutor.cuando(it, java.time.LocalDateTime.now())}"
+            } + "."
+            is Respuesta.NoEncontrada -> r.mensaje + " ¿Lo apunto?"
+            is Respuesta.Preguntar -> r.mensaje
+        }
+        Notificaciones.mostrarDictado(this, mensaje, texto.ifBlank { null })
+        if (r is Respuesta.Hecha || m == null) {
+            hablar(mensaje) { terminarDictado() }
+        } else {
+            val siguiente = r
+            hablar(mensaje) { oir(m) { respuesta -> atender(respuesta, silencioso, siguiente, rondas + 1) } }
+        }
     }
 
     private fun terminarDictado() {

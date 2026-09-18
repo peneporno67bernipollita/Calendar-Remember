@@ -102,8 +102,8 @@ class MainActivity : ComponentActivity() {
                 var borrador by remember { mutableStateOf<Evento?>(null) }
 
                 // Cuando se llega desde una notificación o desde un dictado
-                // dudoso, se abre directamente ese evento. Desde un plan de
-                // WhatsApp o un texto compartido, el editor ya relleno.
+                // dudoso, se abre directamente ese evento. Desde un texto
+                // compartido, el editor ya relleno.
                 remember(eventos, revision) {
                     intent?.getStringExtra("evento")?.let { id ->
                         Almacen.porId(id)?.let {
@@ -169,8 +169,6 @@ class MainActivity : ComponentActivity() {
                 if (ajustesAbiertos) {
                     @Suppress("UNUSED_VARIABLE") val r = revision
                     DialogoAjustes(
-                        planesActivos = planesDeWhatsApp(),
-                        alPlanes = { abrirAccesoNotificaciones() },
                         escuchaActiva = escuchaActiva,
                         alEscucha = {
                             ajustesAbiertos = false
@@ -244,22 +242,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         revision++
-    }
-
-    /** Si Nébula puede leer las notificaciones (para los planes de WhatsApp). */
-    private fun planesDeWhatsApp(): Boolean =
-        androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
-
-    /** El permiso de leer notificaciones solo se da desde los ajustes del sistema. */
-    private fun abrirAccesoNotificaciones() {
-        val detalle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
-                Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
-                ComponentName(this, com.calendarremember.avisos.OyenteWhatsApp::class.java).flattenToString(),
-            )
-        } else null
-        runCatching { startActivity(detalle ?: error("")) }
-            .onFailure { abrir(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
     }
 
     private fun tieneMicro() = ContextCompat.checkSelfPermission(
