@@ -52,7 +52,7 @@ object Almacen {
         }
         Programador.reprogramarTodo(contexto, _eventos.value)
         WidgetProximos.refrescar(contexto)
-        Notificaciones.refrescarAgendaDelDia(contexto)
+        Notificaciones.refrescarAgenda(contexto)
     }
 
     fun guardar(contexto: Context, evento: Evento) {

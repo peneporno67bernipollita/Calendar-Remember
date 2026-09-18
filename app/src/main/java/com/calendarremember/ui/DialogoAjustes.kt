@@ -23,6 +23,8 @@ import androidx.compose.ui.window.Dialog
 
 @Composable
 fun DialogoAjustes(
+    agendaActiva: Boolean,
+    alCambiarAgenda: () -> Unit,
     alCerrar: () -> Unit,
     alPermisoAlarmas: () -> Unit,
     alExportar: () -> Unit,
@@ -40,6 +42,15 @@ fun DialogoAjustes(
             ) {
                 Text("Ajustes", color = Neon.Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
 
+                Opcion(
+                    titulo = if (agendaActiva) "Agenda en el bloqueo: activada"
+                        else "Agenda en el bloqueo: desactivada",
+                    detalle = if (agendaActiva)
+                        "Notificación fija con tus próximos eventos. Toca para quitarla."
+                    else
+                        "Toca para ver tus próximos eventos sin desbloquear.",
+                    alPulsar = alCambiarAgenda,
+                )
                 Opcion(
                     titulo = "Permitir alarmas exactas",
                     detalle = "Necesario desde Android 12 para que el aviso suene a su hora.",

@@ -6,4 +6,5 @@
     <string name="widget_dictar">Dictar un evento</string>
     <string name="atajo_dictar">Dictar</string>
     <string name="atajo_dictar_largo">Dictar un evento</string>
+    <string name="abrir">Abrir</string>
 </resources>

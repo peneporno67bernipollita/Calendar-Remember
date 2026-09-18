@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La agenda desplegada: la fecha de hoy, los cuatro próximos eventos y los
+     botones para dictar o abrir la app. Son huecos fijos que se muestran u
+     ocultan: una notificación no admite listas de tamaño variable. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/fondo_notif"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/ng_fecha"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:textColor="#00E5FF"
+        android:textSize="11sp"
+        android:letterSpacing="0.14"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/ng_vacio"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingVertical="6dp"
+        android:text="@string/widget_vacio"
+        android:textColor="#7C869C"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/ng_fila_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingVertical="3dp">
+        <TextView
+            android:id="@+id/ng_barra_1"
+            android:layout_width="3dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="8dp"
+            android:background="#00E5FF" />
+        <TextView
+            android:id="@+id/ng_cuando_1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="84dp"
+            android:textColor="#00E5FF"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/ng_titulo_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#E8ECF5"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ng_fila_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingVertical="3dp">
+        <TextView
+            android:id="@+id/ng_barra_2"
+            android:layout_width="3dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="8dp"
+            android:background="#00E5FF" />
+        <TextView
+            android:id="@+id/ng_cuando_2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="84dp"
+            android:textColor="#00E5FF"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/ng_titulo_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#E8ECF5"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ng_fila_3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingVertical="3dp">
+        <TextView
+            android:id="@+id/ng_barra_3"
+            android:layout_width="3dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="8dp"
+            android:background="#00E5FF" />
+        <TextView
+            android:id="@+id/ng_cuando_3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="84dp"
+            android:textColor="#00E5FF"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/ng_titulo_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#E8ECF5"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ng_fila_4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingVertical="3dp">
+        <TextView
+            android:id="@+id/ng_barra_4"
+            android:layout_width="3dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="8dp"
+            android:background="#00E5FF" />
+        <TextView
+            android:id="@+id/ng_cuando_4"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="84dp"
+            android:textColor="#00E5FF"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/ng_titulo_4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#E8ECF5"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/ng_dictar"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/fondo_boton_notif"
+            android:gravity="center"
+            android:text="@string/atajo_dictar"
+            android:textColor="#00E5FF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/ng_abrir"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:background="@drawable/fondo_boton_notif_tenue"
+            android:gravity="center"
+            android:text="@string/abrir"
+            android:textColor="#E8ECF5"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

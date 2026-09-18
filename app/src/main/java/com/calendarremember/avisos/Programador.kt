@@ -86,8 +86,12 @@ object Programador {
     }
 
     /**
-     * Una pasada diaria de madrugada que vuelve a programar todo. Es lo que
-     * hace entrar en el horizonte a los eventos lejanos según se acercan.
+     * Una pasada diaria que vuelve a programar todo. Es lo que hace entrar en
+     * el horizonte a los eventos lejanos según se acercan.
+     *
+     * Va justo después de medianoche y no de madrugada: la agenda de la
+     * pantalla de bloqueo dice "Hoy" y "Mañana", y a las 00:00 esas palabras
+     * cambian de significado.
      */
     private fun programarMantenimiento(contexto: Context, gestor: AlarmManager) {
         val intent = Intent(contexto, ReceptorAviso::class.java).apply {
@@ -98,8 +102,37 @@ object Programador {
             contexto, "mantenimiento".hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val manana = LocalDateTime.now().toLocalDate().plusDays(1).atTime(3, 30)
+        val manana = LocalDateTime.now().toLocalDate().plusDays(1).atTime(0, 5)
         val cuando = manana.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        gestor.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cuando, intencion)
+    }
+
+    const val ACCION_REFRESCAR = "com.calendarremember.REFRESCAR"
+
+    /**
+     * Deja programado el repintado de la agenda para cuando empiece [evento].
+     *
+     * Un evento sin aviso "a la hora" no despierta a la app al empezar, así
+     * que sin esto la agenda lo seguiría anunciando como próximo hasta el
+     * siguiente cambio. Solo hace falta uno: cada repintado programa el suyo.
+     */
+    fun programarRefresco(contexto: Context, evento: Evento?) {
+        val gestor = contexto.getSystemService(AlarmManager::class.java) ?: return
+        val intencion = PendingIntent.getBroadcast(
+            contexto, ACCION_REFRESCAR.hashCode(),
+            Intent(contexto, ReceptorAviso::class.java).apply {
+                action = ACCION_REFRESCAR
+                data = android.net.Uri.parse("calendarremember://refrescar")
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        gestor.cancel(intencion)
+        if (evento == null) return
+        // Un minuto después de empezar, para que ya cuente como pasado. No
+        // hace falta exactitud: da igual que la lista se ponga al día un
+        // par de minutos tarde.
+        val cuando = evento.inicioMillis + 60_000L
+        if (cuando <= System.currentTimeMillis()) return
         gestor.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cuando, intencion)
     }
 }

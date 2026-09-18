@@ -7,14 +7,20 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.View
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.calendarremember.MainActivity
 import com.calendarremember.R
 import com.calendarremember.datos.Almacen
+import com.calendarremember.datos.ColorEvento
 import com.calendarremember.datos.Evento
+import com.calendarremember.datos.Preferencias
+import com.calendarremember.voz.VozActivity
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 object Notificaciones {
 
@@ -27,17 +33,24 @@ object Notificaciones {
     const val CANAL_ALARMAS = "alarmas-sin-tono"
     private const val CANAL_ALARMAS_VIEJO = "alarmas"
 
-    const val CANAL_AGENDA = "agenda"
+    // La agenda también estrena canal. El viejo era de importancia baja, y
+    // Android 13 esconde por defecto las notificaciones silenciosas en la
+    // pantalla de bloqueo: justo donde tiene que verse. El nuevo es de
+    // importancia normal pero sin sonido ni vibración.
+    const val CANAL_AGENDA = "agenda-bloqueo"
+    private const val CANAL_AGENDA_VIEJO = "agenda"
     const val ID_AGENDA = 7001
 
     const val ACCION_DESCARTAR = "com.calendarremember.DESCARTAR"
 
     private val FMT_HORA = DateTimeFormatter.ofPattern("HH:mm")
+    private val ES = Locale("es", "ES")
 
     fun crearCanales(contexto: Context) {
         val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
 
         gestor.deleteNotificationChannel(CANAL_ALARMAS_VIEJO)
+        gestor.deleteNotificationChannel(CANAL_AGENDA_VIEJO)
 
         // Los avisos de los días previos: se oyen, pero no interrumpen.
         gestor.createNotificationChannel(
@@ -61,15 +74,17 @@ object Notificaciones {
             }
         )
 
-        // La agenda del día, visible en la pantalla de bloqueo.
+        // La agenda fija, que hace de widget en la pantalla de bloqueo.
         gestor.createNotificationChannel(
             NotificationChannel(
-                CANAL_AGENDA, "Agenda del día", NotificationManager.IMPORTANCE_LOW
+                CANAL_AGENDA, "Agenda en la pantalla de bloqueo",
+                NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
-                description = "Lo que te queda por hacer hoy."
+                description = "Tus próximos eventos, siempre a la vista."
                 setShowBadge(false)
                 setSound(null, null)
                 enableVibration(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
         )
     }
@@ -173,45 +188,140 @@ object Notificaciones {
     }
 
     /**
-     * Notificación con lo que queda por hacer hoy, visible en la pantalla de
-     * bloqueo. Solo lista lo que aún no ha pasado: una agenda que sigue
-     * anunciando un evento de hace media hora estorba más de lo que informa.
-     * Cuando no queda nada, desaparece sola.
+     * La agenda fija de la pantalla de bloqueo: hace de widget.
+     *
+     * Android 13 no deja poner widgets en el bloqueo, pero sí notificaciones,
+     * así que esto es un widget con forma de notificación: plegada dice lo
+     * siguiente que toca; desplegada, la fecha, los cuatro próximos eventos y
+     * los botones de dictar y abrir.
+     *
+     * Solo cuenta lo que aún no ha pasado. Se repinta al cambiar los eventos,
+     * cuando empieza cada uno y a medianoche, para que "Hoy" y "Mañana" no se
+     * queden desfasados.
      */
-    fun refrescarAgendaDelDia(contexto: Context) {
+    fun refrescarAgenda(contexto: Context) {
         val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
-        val ahora = LocalDateTime.now()
-        val hoy = LocalDate.now()
 
-        val pendientes = Almacen.eventos.value.filter {
-            it.inicio.toLocalDate() == hoy &&
-                (it.todoElDia || it.inicio.isAfter(ahora))
-        }
-
-        if (pendientes.isEmpty()) {
+        if (!Preferencias.agendaEnBloqueo(contexto)) {
             gestor.cancel(ID_AGENDA)
             return
         }
 
-        val lineas = pendientes.take(6).map {
-            if (it.todoElDia) "· ${it.titulo}" else "${it.inicio.format(FMT_HORA)}  ${it.titulo}"
-        }
-        val estilo = NotificationCompat.InboxStyle()
-        lineas.forEach { estilo.addLine(it) }
+        val ahora = LocalDateTime.now()
+        val hoy = LocalDate.now()
+        val proximos = Almacen.eventos.value.filter {
+            if (it.todoElDia) !it.inicio.toLocalDate().isBefore(hoy)
+            else it.inicio.isAfter(ahora)
+        }.take(4)
 
-        val titulo = if (pendientes.size == 1) "1 evento hoy" else "${pendientes.size} eventos hoy"
+        val paquete = contexto.packageName
+
+        // --- Plegada: una línea -------------------------------------------
+        val plegada = RemoteViews(paquete, R.layout.notif_agenda_pequena)
+        val primero = proximos.firstOrNull()
+        if (primero == null) {
+            plegada.setViewVisibility(R.id.np_cuando, View.GONE)
+            plegada.setTextViewText(R.id.np_titulo, "Nada a la vista")
+            plegada.setTextViewText(R.id.np_mas, "")
+        } else {
+            plegada.setViewVisibility(R.id.np_cuando, View.VISIBLE)
+            plegada.setTextViewText(R.id.np_cuando, etiquetaCuando(primero, hoy))
+            plegada.setTextColor(R.id.np_cuando, colorDe(primero))
+            plegada.setTextViewText(R.id.np_titulo, primero.titulo)
+            plegada.setTextViewText(
+                R.id.np_mas,
+                if (proximos.size > 1) "+${proximos.size - 1}" else "",
+            )
+        }
+
+        // --- Desplegada: la fecha, cuatro eventos y los botones -----------
+        val desplegada = RemoteViews(paquete, R.layout.notif_agenda_grande)
+        desplegada.setTextViewText(
+            R.id.ng_fecha,
+            hoy.format(DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", ES)).uppercase(ES),
+        )
+        desplegada.setViewVisibility(
+            R.id.ng_vacio, if (proximos.isEmpty()) View.VISIBLE else View.GONE,
+        )
+
+        val filas = listOf(
+            listOf(R.id.ng_fila_1, R.id.ng_barra_1, R.id.ng_cuando_1, R.id.ng_titulo_1),
+            listOf(R.id.ng_fila_2, R.id.ng_barra_2, R.id.ng_cuando_2, R.id.ng_titulo_2),
+            listOf(R.id.ng_fila_3, R.id.ng_barra_3, R.id.ng_cuando_3, R.id.ng_titulo_3),
+            listOf(R.id.ng_fila_4, R.id.ng_barra_4, R.id.ng_cuando_4, R.id.ng_titulo_4),
+        )
+        filas.forEachIndexed { i, (fila, barra, cuando, titulo) ->
+            val evento = proximos.getOrNull(i)
+            if (evento == null) {
+                desplegada.setViewVisibility(fila, View.GONE)
+            } else {
+                val color = colorDe(evento)
+                desplegada.setViewVisibility(fila, View.VISIBLE)
+                desplegada.setInt(barra, "setBackgroundColor", color)
+                desplegada.setTextViewText(cuando, etiquetaCuando(evento, hoy))
+                desplegada.setTextColor(cuando, color)
+                desplegada.setTextViewText(titulo, evento.titulo)
+            }
+        }
+
+        desplegada.setOnClickPendingIntent(
+            R.id.ng_dictar,
+            PendingIntent.getActivity(
+                contexto, "agenda-dictar".hashCode(),
+                Intent(contexto, VozActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            ),
+        )
+        desplegada.setOnClickPendingIntent(R.id.ng_abrir, abrirApp(contexto, null))
+
+        // El texto plano va también: algunas vistas de MIUI (y la lectura en
+        // voz alta de accesibilidad) no pintan el diseño propio y tiran de él.
+        val resumen = primero?.let { "${etiquetaCuando(it, hoy)} · ${it.titulo}" }
+            ?: "Nada a la vista"
+
         val notificacion = NotificationCompat.Builder(contexto, CANAL_AGENDA)
             .setSmallIcon(R.drawable.ic_aviso)
-            .setContentTitle(titulo)
-            .setContentText(lineas.joinToString("  ·  "))
-            .setStyle(estilo)
-            // Descartable a propósito: si molesta, se quita de un gesto y
-            // vuelve al próximo cambio de la agenda.
-            .setOngoing(false)
+            .setContentTitle("Próximos")
+            .setContentText(resumen)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(plegada)
+            .setCustomBigContentView(desplegada)
+            // Fija: es un widget, no un aviso. Se quita desde los ajustes de
+            // la app, no deslizándola.
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(abrirApp(contexto, null))
             .build()
         gestor.notify(ID_AGENDA, notificacion)
+
+        // Cuando empiece el próximo evento, esta lista ya estará desfasada:
+        // se deja programado el siguiente repintado.
+        Programador.programarRefresco(contexto, proximos.firstOrNull { !it.todoElDia })
+    }
+
+    /** "Hoy 17:30", "Mañana", "Vie 20 09:00". */
+    private fun etiquetaCuando(evento: Evento, hoy: LocalDate): String {
+        val dia = evento.inicio.toLocalDate()
+        val cuando = when (dia) {
+            hoy -> "Hoy"
+            hoy.plusDays(1) -> "Mañana"
+            else -> dia.format(DateTimeFormatter.ofPattern("EEE d", ES))
+                .replace(".", "")
+                .replaceFirstChar { it.uppercase(ES) }
+        }
+        return if (evento.todoElDia) cuando else "$cuando ${evento.inicio.format(FMT_HORA)}"
+    }
+
+    private fun colorDe(evento: Evento): Int = when (evento.color) {
+        ColorEvento.CIAN -> 0xFF00E5FF.toInt()
+        ColorEvento.MAGENTA -> 0xFFFF2FD0.toInt()
+        ColorEvento.VIOLETA -> 0xFF9D5CFF.toInt()
+        ColorEvento.VERDE -> 0xFF39FF88.toInt()
+        ColorEvento.AMBAR -> 0xFFFFB03A.toInt()
     }
 }

@@ -32,7 +32,7 @@ class ReceptorAviso : BroadcastReceiver() {
                 }
                 // El evento que acaba de sonar ya no es "lo que queda por
                 // hacer hoy", así que la agenda se vuelve a pintar sin él.
-                Notificaciones.refrescarAgendaDelDia(contexto)
+                Notificaciones.refrescarAgenda(contexto)
                 WidgetProximos.refrescar(contexto)
             }
 
@@ -42,7 +42,14 @@ class ReceptorAviso : BroadcastReceiver() {
                 val id = intent.getStringExtra("evento")
                 Sonido.parar()
                 id?.let { Notificaciones.quitar(contexto, it.hashCode()) }
-                Notificaciones.refrescarAgendaDelDia(contexto)
+                Notificaciones.refrescarAgenda(contexto)
+            }
+
+            // Un evento acaba de empezar: la agenda de la pantalla de bloqueo
+            // lo sigue anunciando como "próximo" y hay que quitarlo.
+            Programador.ACCION_REFRESCAR -> {
+                Notificaciones.refrescarAgenda(contexto)
+                WidgetProximos.refrescar(contexto)
             }
 
             "com.calendarremember.MANTENIMIENTO",
@@ -53,7 +60,7 @@ class ReceptorAviso : BroadcastReceiver() {
                 // Al reiniciar el móvil Android borra todas las alarmas
                 // programadas. Sin esto, los avisos se perderían en silencio.
                 Programador.reprogramarTodo(contexto, Almacen.eventos.value)
-                Notificaciones.refrescarAgendaDelDia(contexto)
+                Notificaciones.refrescarAgenda(contexto)
                 WidgetProximos.refrescar(contexto)
             }
         }

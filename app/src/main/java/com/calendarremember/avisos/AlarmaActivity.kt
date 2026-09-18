@@ -79,7 +79,7 @@ class AlarmaActivity : ComponentActivity() {
     private fun cerrar(evento: Evento?) {
         Sonido.parar()
         evento?.let { Notificaciones.quitar(this, it.id.hashCode()) }
-        Notificaciones.refrescarAgendaDelDia(this)
+        Notificaciones.refrescarAgenda(this)
         finish()
     }
 

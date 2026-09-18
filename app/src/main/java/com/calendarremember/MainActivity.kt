@@ -21,6 +21,7 @@ import com.calendarremember.avisos.Notificaciones
 import com.calendarremember.avisos.Programador
 import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.Evento
+import com.calendarremember.datos.Preferencias
 import com.calendarremember.ui.DialogoAjustes
 import com.calendarremember.ui.DialogoEvento
 import com.calendarremember.ui.PantallaPrincipal
@@ -53,7 +54,7 @@ class MainActivity : ComponentActivity() {
         // Al abrir la app se reprograma todo: es el momento en que se sabe
         // seguro que el proceso está vivo y los datos cargados.
         Programador.reprogramarTodo(this, Almacen.eventos.value)
-        Notificaciones.refrescarAgendaDelDia(this)
+        Notificaciones.refrescarAgenda(this)
 
         setContent {
             TemaNebula {
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
                 var diaSugerido by remember { mutableStateOf<LocalDate?>(null) }
                 var dialogoAbierto by remember { mutableStateOf(false) }
                 var ajustesAbiertos by remember { mutableStateOf(false) }
+                var agendaActiva by remember { mutableStateOf(Preferencias.agendaEnBloqueo(this)) }
 
                 // Cuando se llega desde una notificación o desde un dictado
                 // dudoso, se abre directamente ese evento.
@@ -112,6 +114,12 @@ class MainActivity : ComponentActivity() {
 
                 if (ajustesAbiertos) {
                     DialogoAjustes(
+                        agendaActiva = agendaActiva,
+                        alCambiarAgenda = {
+                            agendaActiva = !agendaActiva
+                            Preferencias.ponerAgendaEnBloqueo(this, agendaActiva)
+                            Notificaciones.refrescarAgenda(this)
+                        },
                         alCerrar = { ajustesAbiertos = false },
                         alPermisoAlarmas = { abrirAjustesAlarmas() },
                         alExportar = { exportarCopia() },
