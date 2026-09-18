@@ -64,4 +64,8 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.13.0@aar")
 
     testImplementation("junit:junit:4.13.2")
+    // En las pruebas sin Android, org.json es solo un esqueleto que falla al
+    // usarse: esta es la de verdad, para probar que los eventos se guardan
+    // y se leen igual.
+    testImplementation("org.json:json:20240303")
 }
