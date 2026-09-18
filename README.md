@@ -14,9 +14,10 @@ todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
   dos días, un día, una hora, a la hora en punto.
 - **Widget en la pantalla de inicio** — los tres próximos eventos y un botón
   de micrófono que dicta de un toque.
-- **Agenda del día en la pantalla de bloqueo** — lo que te queda por hacer hoy,
-  sin desbloquear. Va sola: quita cada evento en cuanto pasa su hora y
-  desaparece cuando no queda nada.
+- **Agenda en la pantalla de bloqueo** — una notificación fija que hace de
+  widget: plegada, lo siguiente que toca; desplegada, los cuatro próximos
+  eventos con sus colores y botones para dictar o abrir la app. Se pone al
+  día sola al empezar cada evento y a medianoche. Se apaga en Ajustes.
 
 ## Instalar
 
@@ -125,5 +126,5 @@ si una regla de interpretación se rompe, el APK no llega a generarse.
   los widgets de terceros del bloqueo y solo los ha devuelto a partir de la
   versión 14, en tablets. El widget ya se declara apto para esa ubicación, así
   que aparecerá en los dispositivos que lleguen a admitirlo. Mientras tanto,
-  la agenda del día en la pantalla de bloqueo cumple esa función.
+  la notificación-agenda cumple esa función.
 - Eventos que se repiten.
