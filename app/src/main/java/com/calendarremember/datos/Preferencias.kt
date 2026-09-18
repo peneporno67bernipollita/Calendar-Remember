@@ -33,4 +33,19 @@ object Preferencias {
     fun ponerEscucha(contexto: Context, activa: Boolean) {
         prefs(contexto).edit().putBoolean(ESCUCHA, activa).apply()
     }
+
+    /**
+     * La última vez que se oyó "Nébula", el sistema no dejó abrir la pantalla
+     * del dictado (en MIUI, falta el permiso de ventanas en segundo plano).
+     * Se atendió igual, sin pantalla; esto sirve para decirle al usuario qué
+     * permiso le falta para tener el círculo.
+     */
+    fun aperturaBloqueada(contexto: Context): Boolean =
+        prefs(contexto).getBoolean(APERTURA_BLOQUEADA, false)
+
+    fun ponerAperturaBloqueada(contexto: Context, bloqueada: Boolean) {
+        prefs(contexto).edit().putBoolean(APERTURA_BLOQUEADA, bloqueada).apply()
+    }
+
+    private const val APERTURA_BLOQUEADA = "apertura_bloqueada"
 }

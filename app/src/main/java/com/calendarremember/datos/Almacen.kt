@@ -70,6 +70,14 @@ object Almacen {
 
     fun porId(id: String): Evento? = _eventos.value.firstOrNull { it.id == id }
 
+    /** El almacén visto como la agenda sobre la que trabajan las órdenes de voz. */
+    fun comoAgenda(contexto: Context): com.calendarremember.voz.Agenda =
+        object : com.calendarremember.voz.Agenda {
+            override val eventos: List<Evento> get() = _eventos.value
+            override fun guardar(evento: Evento) = guardar(contexto, evento)
+            override fun borrar(id: String) = borrar(contexto, id)
+        }
+
     /** Eventos de hoy en adelante, que es lo que mira el widget. */
     fun proximos(limite: Int = 20): List<Evento> {
         val corte = System.currentTimeMillis() - 12 * 3600_000L

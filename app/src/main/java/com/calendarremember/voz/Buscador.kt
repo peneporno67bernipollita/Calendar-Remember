@@ -28,7 +28,7 @@ object Buscador {
         "voy", "vas", "va", "ir", "tengo", "tenia", "tiene", "hay", "es",
         "eso", "esa", "ese", "esto", "esta", "este", "cosa", "plan", "nada",
         "todo", "evento", "eventos", "recordatorio", "recordatorios", "aviso",
-        "avisos", "nebula",
+        "avisos", "nebula", "hora", "dia", "fecha",
     )
 
     data class Candidato(val evento: Evento, val puntos: Int)

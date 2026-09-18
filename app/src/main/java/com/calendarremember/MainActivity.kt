@@ -166,6 +166,7 @@ class MainActivity : ComponentActivity() {
                         micro = tieneMicro(),
                         sobreApps = Settings.canDrawOverlays(this),
                         bateria = bateriaSinRestricciones(),
+                        aperturaBloqueada = Preferencias.aperturaBloqueada(this),
                         alPedirMicro = { pedirMicro.launch(Manifest.permission.RECORD_AUDIO) },
                         alPedirSobreApps = {
                             abrir(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,

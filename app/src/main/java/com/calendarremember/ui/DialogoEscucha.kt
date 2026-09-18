@@ -40,6 +40,8 @@ fun DialogoEscucha(
     micro: Boolean,
     sobreApps: Boolean,
     bateria: Boolean,
+    /** La última vez, el sistema no dejó abrir el círculo al oír la palabra. */
+    aperturaBloqueada: Boolean,
     alPedirMicro: () -> Unit,
     alPedirSobreApps: () -> Unit,
     alPedirBateria: () -> Unit,
@@ -66,6 +68,27 @@ fun DialogoEscucha(
                         "Con la pantalla apagada no escucha nada.",
                     color = Neon.Tenue, fontSize = 13.sp,
                 )
+
+                // Sin el círculo, la palabra funciona igual: suena un pitido y
+                // se contesta en voz alta. Pero hay que decir por qué no sale.
+                if (activa && (aperturaBloqueada || !sobreApps)) {
+                    Text(
+                        text = if (!sobreApps)
+                            "Ahora mismo, al oírte suena un pitido y te contesto en voz alta, " +
+                                "pero sin el círculo en pantalla. Para verlo, activa «Mostrar sobre otras apps»."
+                        else
+                            "La última vez el móvil no dejó abrir el círculo y te contesté solo en voz. " +
+                                "En Xiaomi falta «Mostrar ventanas emergentes en segundo plano» (en «Otros permisos»).",
+                        color = Neon.Ambar,
+                        fontSize = 13.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Neon.Ambar.copy(alpha = 0.08f))
+                            .border(1.dp, Neon.Ambar.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .padding(12.dp),
+                    )
+                }
 
                 Paso("Micrófono", "Para oír la palabra.", micro, alPedirMicro)
                 Paso(

@@ -67,9 +67,14 @@ class InterpreteTest {
         comprobar("esta noche sacar la basura",
             "Sacar la basura", "17/09 21:00")
 
+    /**
+     * Dicho un jueves, "el lunes que viene" es el lunes siguiente (21), que
+     * es como se entiende en España. Una versión anterior lo mandaba al 28, y
+     * esta prueba daba ese error por bueno.
+     */
     @Test fun lunesQueViene() =
         comprobar("tengo que llevar el coche al taller el lunes que viene",
-            "Llevar el coche al taller", "28/09 todo el día")
+            "Llevar el coche al taller", "21/09 todo el día")
 
     /** "una" es número: no puede confundirse con la hora de la frase. */
     @Test fun menosCuartoDeLaManana() =

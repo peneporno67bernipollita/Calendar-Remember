@@ -41,7 +41,8 @@ object Notificaciones {
     const val CANAL_AGENDA = "agenda-bloqueo"
     private const val CANAL_AGENDA_VIEJO = "agenda"
     const val ID_AGENDA = 7001
-    private const val ID_LLAMADA_DICTADO = 7002
+    private const val ID_DICTADO = 7002
+    private const val CANAL_DICTADO = "dictado"
     private const val ID_REACTIVAR = 7003
 
     const val ACCION_DESCARTAR = "com.calendarremember.DESCARTAR"
@@ -71,6 +72,18 @@ object Notificaciones {
                 CANAL_ALARMAS, "Alarma del evento", NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Salta a la hora exacta del evento."
+                setSound(null, null)
+                enableVibration(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+        )
+
+        // El dictado sin pantalla: aparece arriba, pero sin sonido propio.
+        gestor.createNotificationChannel(
+            NotificationChannel(
+                CANAL_DICTADO, "Dictado por voz", NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Lo que entiende Nébula cuando la llamas por su nombre."
                 setSound(null, null)
                 enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -322,33 +335,27 @@ object Notificaciones {
     }
 
     /**
-     * Se ha oído "Nébula", pero Android no deja abrir el dictado desde el
-     * servicio porque falta el permiso de mostrarse sobre otras apps. Se
-     * ofrece con una notificación que salta a la vista: un toque y dicta.
+     * El dictado atendido por el servicio, sin pantalla: "Te escucho…" con lo
+     * que va entendiendo, y luego la respuesta. Es lo que se ve cuando el
+     * sistema no deja abrir el círculo; la respuesta además se dice en voz.
+     * Sale por arriba sin sonar: un pitido ya ha avisado de que escucha, y un
+     * sonido de notificación se colaría en la grabación.
      */
-    fun mostrarLlamadaDictado(contexto: Context) {
+    fun mostrarDictado(contexto: Context, titulo: String, detalle: String?) {
         val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
-        val dictar = PendingIntent.getActivity(
-            contexto, "llamada-dictado".hashCode(),
-            Intent(contexto, VozActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(VozActivity.DESDE_PALABRA, true)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val notificacion = NotificationCompat.Builder(contexto, CANAL_AVISOS)
+        val notificacion = NotificationCompat.Builder(contexto, CANAL_DICTADO)
             .setSmallIcon(R.drawable.ic_mic)
-            .setContentTitle("Te escucho")
-            .setContentText("Toca para dictar")
+            .setContentTitle(titulo)
+            .setContentText(detalle?.let { "«$it»" })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detalle?.let { "«$it»" } ?: ""))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_CALL)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setFullScreenIntent(dictar, true)
-            .setContentIntent(dictar)
+            .setOnlyAlertOnce(true)
             .setAutoCancel(true)
-            .setTimeoutAfter(15_000)
+            .setTimeoutAfter(20_000)
+            .setContentIntent(abrirApp(contexto, null))
             .build()
-        gestor.notify(ID_LLAMADA_DICTADO, notificacion)
+        gestor.notify(ID_DICTADO, notificacion)
     }
 
     /**

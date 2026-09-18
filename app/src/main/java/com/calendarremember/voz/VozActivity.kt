@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -27,28 +28,33 @@ import com.calendarremember.datos.Evento
 import com.calendarremember.ui.EstadoDictado
 import com.calendarremember.ui.PantallaDictado
 import com.calendarremember.ui.TemaNebula
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * El dictado: escucha, entiende y hace lo que se le pide.
+ * El dictado con pantalla: el círculo que escucha, entiende y hace.
  *
  * La abren el botón de la app, el widget, el de los ajustes rápidos, el
  * acceso directo y el servicio que escucha "Nébula". Usa el reconocedor de
- * Google (el mismo del teclado) pero dentro de una pantalla propia, que es
- * lo que le permite salir sobre la pantalla de bloqueo: la de Google no
- * puede, y obligaba a desbloquear.
+ * Google (el mismo del teclado) dentro de una pantalla propia, que es lo que
+ * le permite salir sobre la pantalla de bloqueo: la de Google no puede.
  *
- * No pide confirmación: si se entiende qué evento es, se apunta o se borra y
- * lo dice. Solo pregunta cuando no hay manera de saberlo, porque dos eventos
- * encajan por igual.
+ * Lo que se pide lo resuelve el Ejecutor, el mismo que usa el servicio
+ * cuando atiende sin pantalla: las dos vías entienden y hacen lo mismo.
  */
 class VozActivity : ComponentActivity() {
 
     companion object {
         /** La abrió la palabra clave: se responde también en voz alta. */
         const val DESDE_PALABRA = "desde_palabra"
+
+        /**
+         * Cuándo se abrió por última vez. El servicio lo mira para saber si
+         * la pantalla llegó a abrirse de verdad: MIUI a veces la bloquea sin
+         * avisar, y entonces el servicio atiende por su cuenta.
+         */
+        @Volatile
+        var abiertaEn = 0L
+            private set
     }
 
     private val ES = Locale("es", "ES")
@@ -56,16 +62,20 @@ class VozActivity : ComponentActivity() {
 
     private var estado by mutableStateOf<EstadoDictado>(EstadoDictado.Escuchando("", 0f))
     private var reconocedor: SpeechRecognizer? = null
-    private var dictadoOriginal = ""
+    private var dictado = ""
+    /** La orden a la espera de que se elija entre varios eventos. */
+    private var pendiente: Interpretacion? = null
 
-    private var tts: TextToSpeech? = null
-    private var ttsListo = false
-    private var responderEnVoz = false
+    private var voz: TextToSpeech? = null
+    private var vozLista = false
+    private var desdePalabra = false
+
+    private val agenda by lazy { Almacen.comoAgenda(this) }
 
     private val pedirMicro = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { concedido ->
-        if (concedido) escuchar() else terminar("Necesito permiso para usar el micrófono", false)
+        if (concedido) escuchar() else terminar("Necesito permiso para usar el micrófono", false, false)
     }
 
     /** Para móviles sin el servicio de reconocimiento: el diálogo del sistema. */
@@ -81,18 +91,24 @@ class VozActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        abiertaEn = SystemClock.elapsedRealtime()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) setShowWhenLocked(true)
+
+        // Si el servicio ya está atendiendo por su cuenta (esta pantalla llegó
+        // tarde), no se estorba: los dos se pelearían por el micrófono.
+        if (EscuchaServicio.dictandoAhora) {
+            finish()
+            return
+        }
 
         Almacen.cargar(this)
         // Mientras se dicta, el micrófono es para el dictado.
         EscuchaServicio.pausar(this)
 
-        responderEnVoz = intent.getBooleanExtra(DESDE_PALABRA, false)
-        if (responderEnVoz) {
-            tts = TextToSpeech(this) { resultado ->
-                ttsListo = resultado == TextToSpeech.SUCCESS
-                if (ttsListo) tts?.language = ES
-            }
+        desdePalabra = intent.getBooleanExtra(DESDE_PALABRA, false)
+        voz = TextToSpeech(this) { resultado ->
+            vozLista = resultado == TextToSpeech.SUCCESS
+            if (vozLista) voz?.language = ES
         }
 
         setContent {
@@ -100,8 +116,10 @@ class VozActivity : ComponentActivity() {
                 PantallaDictado(
                     estado = estado,
                     alCerrar = { finish() },
-                    alElegir = { borrar(it) },
-                    alApuntar = { apuntar(Interprete.interpretar(dictadoOriginal, soloCrear = true)) },
+                    alElegir = { evento -> elegir(evento) },
+                    alApuntar = {
+                        mostrar(Ejecutor.ejecutar(Interprete.interpretar(dictado, soloCrear = true), agenda), false)
+                    },
                 )
             }
         }
@@ -157,7 +175,7 @@ class VozActivity : ComponentActivity() {
             val texto = results
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim()
-            if (texto.isNullOrEmpty()) terminar("No te he oído", false) else atender(texto)
+            if (texto.isNullOrEmpty()) terminar("No te he oído", false, false) else atender(texto)
         }
 
         override fun onError(error: Int) {
@@ -170,7 +188,7 @@ class VozActivity : ComponentActivity() {
                     SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Sin conexión para entenderte"
                     else -> "No he podido escucharte"
                 },
-                false,
+                false, false,
             )
         }
     }
@@ -179,112 +197,84 @@ class VozActivity : ComponentActivity() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Dime qué apunto o qué cancelo")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Dime qué apunto, cambio o cancelo")
         }
         runCatching { dictadoSistema.launch(intent) }
-            .onFailure { terminar("Este móvil no tiene reconocimiento de voz", false) }
+            .onFailure { terminar("Este móvil no tiene reconocimiento de voz", false, false) }
     }
 
     // --- Hacer lo que se ha pedido -----------------------------------------
 
     private fun atender(texto: String) {
-        dictadoOriginal = texto
+        dictado = texto
         val leido = Interprete.interpretar(texto)
-        when (leido.accion) {
-            Accion.CREAR -> apuntar(leido)
-            Accion.BORRAR -> cancelar(leido)
-        }
+        // Una pregunta se contesta siempre en voz alta: es a lo que se pregunta.
+        mostrar(Ejecutor.ejecutar(leido, agenda), leido.accion == Accion.CONSULTAR)
     }
 
-    private fun apuntar(leido: Interpretacion) {
-        val evento = Evento(
-            titulo = leido.titulo,
-            inicio = leido.inicio,
-            todoElDia = leido.todoElDia,
-            avisos = leido.avisos,
-            duracionMin = leido.duracionMin,
-            dictado = leido.dictado,
-        )
-        Almacen.guardar(this, evento)
+    private fun elegir(evento: Evento) {
+        val orden = pendiente ?: return finish()
+        pendiente = null
+        mostrar(Ejecutor.aplicar(orden, evento, agenda), false)
+    }
 
-        // Si no se entendió de qué va, se abre para corregirlo; pero con el
-        // móvil bloqueado eso pediría la contraseña, así que ahí solo se avisa.
-        if (leido.confianza == Confianza.BAJA && !bloqueado()) {
-            startActivity(
-                Intent(this, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    putExtra("evento", evento.id)
+    private fun mostrar(respuesta: Respuesta, esPregunta: Boolean) {
+        when (respuesta) {
+            is Respuesta.Hecha -> {
+                val revisar = respuesta.revisar
+                // Si no se entendió de qué va, se abre para corregirlo; pero con
+                // el móvil bloqueado eso pediría la contraseña, así que ahí solo
+                // se avisa.
+                if (revisar != null && !bloqueado()) {
+                    startActivity(
+                        Intent(this, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            putExtra("evento", revisar.id)
+                        }
+                    )
+                    finish()
+                    return
                 }
-            )
-            finish()
-            return
+                terminar(respuesta.mensaje, respuesta.bien, esPregunta)
+            }
+            is Respuesta.Elegir -> {
+                pendiente = respuesta.leido
+                val boton = if (respuesta.leido.accion == Accion.MOVER) "Cambiar" else "Borrar"
+                estado = EstadoDictado.Elegir(respuesta.mensaje, respuesta.candidatos, boton)
+                if (desdePalabra) decir(respuesta.mensaje) {}
+            }
+            is Respuesta.NoEncontrada -> {
+                estado = EstadoDictado.NoEncontrado(respuesta.mensaje, dictado)
+                if (desdePalabra) decir(respuesta.mensaje) {}
+            }
         }
-        terminar("Apuntado: ${evento.titulo}, ${cuando(evento)}", true)
-    }
-
-    /**
-     * Cancelar borra directamente el evento del que se habla. Solo si hay
-     * varios igual de parecidos pregunta cuál, porque ahí no hay forma de
-     * saberlo; y si no encaja ninguno, ofrece apuntar la frase por si era eso.
-     */
-    private fun cancelar(leido: Interpretacion) {
-        if (leido.titulo.isBlank() && !leido.fechaDicha && !leido.horaDicha) {
-            terminar("Dime qué cancelo", false)
-            return
-        }
-        val encontrados = Buscador.candidatos(
-            criterio = leido.titulo,
-            fecha = if (leido.fechaDicha) leido.inicio.toLocalDate() else null,
-            eventos = Almacen.eventos.value,
-            ahora = LocalDateTime.now(),
-            hora = if (leido.horaDicha) leido.inicio.toLocalTime() else null,
-        )
-        if (encontrados.isEmpty()) {
-            estado = EstadoDictado.NoEncontrado(leido.titulo, leido.dictado)
-            return
-        }
-        val unico = Buscador.unico(encontrados)
-        if (unico != null) borrar(unico)
-        else estado = EstadoDictado.Elegir(encontrados.take(4).map { it.evento })
-    }
-
-    private fun borrar(evento: Evento) {
-        Almacen.borrar(this, evento.id)
-        terminar("Borrado: ${evento.titulo}, ${cuando(evento)}", true)
     }
 
     // --- Terminar ---------------------------------------------------------
 
-    /** Lo dice en pantalla (y en voz, si vino de "Nébula") y se cierra. */
-    private fun terminar(mensaje: String, bien: Boolean) {
+    /** Lo enseña, lo dice si toca, y se cierra. */
+    private fun terminar(mensaje: String, bien: Boolean, esPregunta: Boolean) {
         estado = EstadoDictado.Hecho(mensaje, bien)
-        val motor = tts
-        if (responderEnVoz && motor != null && ttsListo) {
-            motor.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {}
-                override fun onDone(utteranceId: String?) { principal.post { finish() } }
-                @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String?) { principal.post { finish() } }
-            })
-            motor.speak(mensaje, TextToSpeech.QUEUE_FLUSH, null, "respuesta")
+        if ((desdePalabra || esPregunta) && vozLista) {
+            decir(mensaje) { finish() }
             // Por si la voz se queda colgada: la pantalla no se queda abierta.
-            principal.postDelayed({ finish() }, 6_000)
+            principal.postDelayed({ finish() }, 15_000)
         } else {
-            principal.postDelayed({ finish() }, 1_800)
+            // El tiempo justo para leerlo: más cuanto más largo.
+            principal.postDelayed({ finish() }, maxOf(1_800L, mensaje.length * 55L))
         }
     }
 
-    /** "el sábado 19", "hoy a las 17:30". */
-    private fun cuando(evento: Evento): String {
-        val hoy = java.time.LocalDate.now()
-        val dia = evento.inicio.toLocalDate()
-        val nombreDia = when (dia) {
-            hoy -> "hoy"
-            hoy.plusDays(1) -> "mañana"
-            else -> "el " + dia.format(DateTimeFormatter.ofPattern("EEEE d", ES))
-        }
-        return if (evento.todoElDia) nombreDia
-        else "$nombreDia a las ${evento.inicio.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+    private fun decir(texto: String, alAcabar: () -> Unit) {
+        val motor = voz ?: return alAcabar()
+        if (!vozLista) return alAcabar()
+        motor.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) { principal.post { alAcabar() } }
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) { principal.post { alAcabar() } }
+        })
+        motor.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "respuesta")
     }
 
     private fun bloqueado(): Boolean =
@@ -293,7 +283,7 @@ class VozActivity : ComponentActivity() {
     override fun onDestroy() {
         principal.removeCallbacksAndMessages(null)
         runCatching { reconocedor?.destroy() }
-        runCatching { tts?.shutdown() }
+        runCatching { voz?.shutdown() }
         EscuchaServicio.reanudar(this)
         super.onDestroy()
     }

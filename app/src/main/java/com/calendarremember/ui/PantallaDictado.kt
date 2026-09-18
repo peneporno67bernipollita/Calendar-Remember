@@ -51,10 +51,10 @@ sealed interface EstadoDictado {
     /** Escuchando. [nivel] es el volumen de la voz, de 0 a 1, para el pulso. */
     data class Escuchando(val parcial: String, val nivel: Float) : EstadoDictado
     data class Hecho(val mensaje: String, val bien: Boolean) : EstadoDictado
-    /** Varios eventos encajan por igual: toca decir cuál. */
-    data class Elegir(val candidatos: List<Evento>) : EstadoDictado
-    /** Sonaba a cancelar, pero no encaja con nada. */
-    data class NoEncontrado(val buscado: String, val dictado: String) : EstadoDictado
+    /** Varios eventos encajan por igual: toca decir cuál. [boton]: "Borrar", "Cambiar". */
+    data class Elegir(val pregunta: String, val candidatos: List<Evento>, val boton: String) : EstadoDictado
+    /** Sonaba a una orden sobre un evento, pero no encaja con ninguno. */
+    data class NoEncontrado(val mensaje: String, val dictado: String) : EstadoDictado
 }
 
 /**
@@ -121,14 +121,14 @@ fun PantallaDictado(
 
                 is EstadoDictado.Elegir -> {
                     Text(
-                        text = "¿Cuál borro?",
+                        text = estado.pregunta,
                         color = Neon.Texto,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         for (evento in estado.candidatos) {
-                            FichaBorrar(evento) { alElegir(evento) }
+                            FichaElegir(evento, estado.boton) { alElegir(evento) }
                         }
                     }
                 }
@@ -138,9 +138,7 @@ fun PantallaDictado(
                         Icon(Icons.Default.PriorityHigh, null, tint = Neon.Ambar, modifier = Modifier.size(40.dp))
                     }
                     Text(
-                        text = if (estado.buscado.isNotBlank())
-                            "No encuentro nada parecido a «${estado.buscado}»"
-                        else "No sé qué evento cancelar",
+                        text = estado.mensaje,
                         color = Neon.Texto,
                         fontSize = 19.sp,
                         textAlign = TextAlign.Center,
@@ -183,14 +181,16 @@ private fun Pulso(color: Color, nivel: Float, contenido: @Composable () -> Unit)
 }
 
 @Composable
-private fun FichaBorrar(evento: Evento, alPulsar: () -> Unit) {
+private fun FichaElegir(evento: Evento, boton: String, alPulsar: () -> Unit) {
     val formato = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", ES)
+    // Rojo para borrar, que no tiene vuelta atrás; cian para lo demás.
+    val color = if (boton == "Borrar") Neon.Rojo else Neon.Cian
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Neon.SuperficieAlta)
-            .border(1.dp, Neon.Rojo.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
             .clickable(onClick = alPulsar)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -217,7 +217,7 @@ private fun FichaBorrar(evento: Evento, alPulsar: () -> Unit) {
                 fontSize = 12.sp,
             )
         }
-        Text("Borrar", color = Neon.Rojo, fontSize = 14.sp)
+        Text(boton, color = color, fontSize = 14.sp)
     }
 }
 
