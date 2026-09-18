@@ -3,8 +3,10 @@
 Calendario y recordatorios por voz para Android. Negro con luces de neón,
 todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
 
+- **Palabra clave** — con la pantalla encendida, di «Nébula» y se abre el
+  dictado, también sobre la pantalla de bloqueo.
 - **Cancelar dictando** — «cancela la cena del viernes» busca a qué te
-  refieres y te lo enseña antes de borrar nada.
+  refieres y lo borra.
 - **Dictado en español** — «cita con el dentista el martes a las cinco y
   media» se convierte en un evento el martes a las 17:30. Lo entiende la
   propia app, sin enviar nada a ningún sitio.
@@ -74,7 +76,7 @@ ficha para que la corrijas en vez de guardar algo torcido.
 | ...avísame dos días antes | cambia la antelación del aviso |
 | ...durante dos horas | fija la duración |
 | el finde | el sábado que viene |
-| cancela la cena del viernes | busca esa cena y pregunta si la borra |
+| cancela la cena del viernes | busca esa cena y la borra |
 | lo del finde, cancélalo | busca por fecha cuando no recuerdas el nombre |
 
 Las horas sin más ("a las cinco") se entienden como la tarde entre la una y
