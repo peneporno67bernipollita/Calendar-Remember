@@ -22,7 +22,8 @@ object Planes {
             """os\s+va\s+bien|te\s+viene\s+bien|os\s+viene\s+bien|podemos|hacemos|cenamos|comemos|desayunamos|""" +
             """merendamos|tomamos|salimos|jugamos|vamos|plan|planazo|cena|comida|comer|cenar|desayuno|cafe|""" +
             """cervezas?|cerve|birras?|copas?|fiesta|cumple|cumpleanos|partido|pachanga|padel|futbol|reunion|""" +
-            """cita|boda|concierto|cine|peli|teatro|viaje|escapada|excursion|barbacoa|quedada|entreno|clase)\b"""
+            """cita|boda|concierto|cine|peli|teatro|viaje|escapada|excursion|barbacoa|quedada|entreno|clase|""" +
+            """examen|entrega|recordad|no\s+olvideis|acordaos|casa\s+rural)\b"""
     )
 
     /** Lo que ya pasó, o lo que se cae: no es un plan que apuntar. */
@@ -37,7 +38,8 @@ object Planes {
         """^(?:(?:oye|ey|eh|hey|tio|tia|bro|chicos|chicas|gente|equipo|pues|entonces|bueno|vale|venga|y\s+si|""" +
             """que\s+tal\s+si|que\s+tal|te\s+parece\s+si|os\s+parece\s+si|te\s+parece|os\s+parece|""" +
             """quedamos|nos\s+vemos|te\s+vienes|os\s+venis|vienes|venis|te\s+apuntas|os\s+apuntais|""" +
-            """te\s+apetece|os\s+apetece|vamos|podemos|hacemos|y|a|para|al|de)\b[\s,:.!]*)+""",
+            """te\s+apetece|os\s+apetece|vamos|podemos|hacemos|recordad\s+que|recordad|acordaos\s+de\s+que|""" +
+            """acordaos|no\s+olvideis\s+que|no\s+olvideis|ojo\s+que|ojo|y|a|para|al|de|el|la|los|las|un|una)\b[\s,:.!]*)+""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -63,15 +65,17 @@ object Planes {
         if (!leido.fechaDicha && !leido.horaDicha) return null
         // "Mañana te digo algo" no es un plan: sin hora, hace falta algo más
         // que un día y un verbo cualquiera.
-        if (!leido.horaDicha && !Regex("""\b(?:quedamos|quedar|nos\s+vemos|cumple|cumpleanos|boda|fiesta|cena|comida|""" +
-                """viaje|escapada|concierto|partido|excursion|barbacoa|quedada|plan)\b""").containsMatchIn(texto)) return null
+        if (!leido.horaDicha && leido.hasta == null &&
+            !Regex("""\b(?:quedamos|quedar|nos\s+vemos|cumple|cumpleanos|boda|fiesta|cena|comida|viaje|escapada|""" +
+                """concierto|partido|excursion|barbacoa|quedada|plan|examen|entrega)\b""").containsMatchIn(texto)) return null
         val inicio = leido.inicio
         val finDia = leido.hasta ?: inicio.toLocalDate()
         if (finDia.isBefore(ahora.toLocalDate())) return null
         if (!leido.todoElDia && !inicio.isAfter(ahora)) return null
         if (inicio.toLocalDate().isAfter(ahora.toLocalDate().plusDays(MAX_DIAS))) return null
 
-        return evento(leido, titulo(leido.titulo, deQuien, grupo), limpio, deQuien)
+        val quedada = Regex("""^\s*(?:\W*\s*)?(?:y\s+si\s+)?(?:quedamos|nos\s+vemos|quedar)\b""").containsMatchIn(texto)
+        return evento(leido, titulo(leido.titulo, deQuien, grupo, quedada), limpio, deQuien)
     }
 
     /**
@@ -96,14 +100,37 @@ object Planes {
         notas = (if (deQuien != null) "$deQuien: " else "") + "«${mensaje.take(300)}»",
     )
 
-    /** "Quedamos para cenar" de Marta es "Cenar con Marta". */
-    private fun titulo(leido: String, deQuien: String?, grupo: String?): String {
+    /**
+     * "Quedamos para cenar" de Marta es "Cenar con Marta"; "quedamos
+     * mañana en la plaza", "Quedada en la plaza con Marta"; "mi cumple" de
+     * Ana, "Cumple de Ana".
+     */
+    private fun titulo(leido: String, deQuien: String?, grupo: String?, quedada: Boolean = false): String {
         var t = leido.replace(Regex("""[¿?¡!]"""), " ").replace(Regex("""\s+"""), " ").trim()
         var previo: String
         do {
             previo = t
             PROPUESTA.find(normalizar(t))?.let { m -> t = t.substring(m.value.length).trim() }
         } while (t != previo && t.isNotEmpty())
+        // Lo que va detrás de una coma suele ser la pregunta o un
+        // comentario: "Partido de pádel, ¿te apuntas?", "Concierto, empieza…".
+        val coma = t.indexOf(',')
+        if (coma > 0) {
+            val cola = normalizar(t.substring(coma + 1)).trim()
+            if (Regex("""^(?:te|os|vale|ok|empieza|empezamos|que|y\s+si|si|no|eh|va|venga|a\s+que|seguro|porfa|jaja)\b""")
+                    .containsMatchIn(cola) || cola.split(' ').size <= 2) {
+                t = t.substring(0, coma)
+            }
+        }
+        if (deQuien != null) {
+            t = t.replace(Regex("""^[Mm]i\s+(cumple|cumpleaños|cumpleanos|boda|fiesta|casa)\b""")) { m ->
+                "${m.groupValues[1].replaceFirstChar { it.uppercase() }} de $deQuien"
+            }.replace(Regex("""\ben\s+mi\s+casa\b""")) { "en casa de $deQuien" }
+        }
+        // "Quedamos en la plaza": la quedada es el título, el sitio lo acompaña.
+        if (quedada && Regex("""^(?:en|a\s+la|al|a|delante|frente|junto)\b""").containsMatchIn(normalizar(t))) {
+            t = "Quedada $t"
+        }
         t = t.trim(' ', ',', '.', ';', ':').replaceFirstChar { it.uppercase() }
         if (t.length > 50) t = t.take(50).substringBeforeLast(' ') + "…"
         if (t.isBlank()) t = "Plan"

@@ -1,13 +1,21 @@
 # Nébula
 
-Calendario y recordatorios por voz para Android. Negro con luces de neón,
-todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
+Calendario y recordatorios por voz para Android. Neón sobre una nebulosa
+animada, todo dentro del móvil: sin cuentas, sin servidor y sin conexión.
 
-- **Palabra clave** — con la pantalla encendida, di «Nébula» y te escucha,
-  también sobre la pantalla de bloqueo.
+- **Palabra clave** — di «Nébula» y te escucha: en el escritorio, dentro de
+  otra app o con el móvil bloqueado. Si lo activas, también con la pantalla
+  apagada, como «Oye Siri».
 - **Cuatro órdenes por voz** — apuntar, cancelar, cambiar de fecha u hora, y
   preguntar qué tienes. Sin confirmaciones: si está claro, lo hace y lo dice.
-- **Repeticiones** — «todos los martes», «cada día», «todos los años».
+- **Varios días** — «viaje del 27 al 3», «vacaciones del 1 al 15 de
+  agosto», «de lunes a viernes», «todo el finde». El calendario lo pinta
+  como una barra de principio a fin.
+- **Repeticiones** — «todos los martes», «los martes y jueves», «cada dos
+  semanas», «de lunes a viernes a las 7», «todos los años».
+- **Planes de WhatsApp** — si te proponen un plan con día u hora, te
+  ofrece apuntarlo de un toque. Y cualquier mensaje se puede compartir con
+  Nébula para apuntarlo.
 - **Alarma el día del evento** — suena como un despertador y sale a pantalla
   completa sobre el bloqueo, aunque el móvil lleve horas suspendido.
 - **Avisos los días antes** — cada evento elige sus antelaciones: una semana,
@@ -34,16 +42,27 @@ un APK nuevo automáticamente.
 
 ## Hablarle
 
-**Diciendo «Nébula»** con la pantalla encendida, en el inicio o en el
-bloqueo. Se activa en *Ajustes → Escuchar «Nébula»*, que guía por los
-permisos que hacen falta (en Xiaomi, varios). Con la pantalla apagada no
-escucha nada.
+**Diciendo «Nébula»**. Se activa en *Ajustes → Escuchar «Nébula»*, que guía
+por los permisos que hacen falta y dice cuáles faltan (en Xiaomi, varios:
+inicio automático, ventanas emergentes en segundo plano y mostrar en
+pantalla de bloqueo).
 
-Al oírte abre el círculo de dictado. Si el sistema no le deja abrirlo —falta
-el permiso de mostrarse sobre otras apps, o MIUI lo bloquea sin avisar—, te
-atiende igual: suena un pitido, lo dices, y te contesta en voz alta. Nunca
-hay que tocar nada para que escuche. Los ajustes dicen qué permiso falta para
-tener el círculo.
+- **Con el móvil desbloqueado** abre el círculo de dictado encima de lo que
+  estés haciendo.
+- **Con el móvil bloqueado** lo abre encima del bloqueo, sin pedir la
+  contraseña: lo lanza como un aviso de pantalla completa, igual que una
+  llamada o la alarma de un evento.
+- **Con la pantalla apagada**, solo si activas «También con la pantalla
+  apagada». Enciende la pantalla y abre el círculo. Si el sensor de
+  proximidad está tapado (en un bolsillo), no enciende nada: te escucha con
+  un pitido y te contesta en voz alta. Gasta más batería, porque el
+  procesador no puede dormirse; para gastar menos, mientras hay silencio el
+  reconocedor no recibe audio (medido con las mismas grabaciones: detecta
+  exactamente lo mismo).
+
+Si el sistema no le deja abrir el círculo, te atiende igual: suena un
+pitido, lo dices, y te contesta en voz alta. Nunca hay que tocar nada para
+que escuche.
 
 ### Cómo distingue «Nébula»
 
@@ -79,20 +98,34 @@ Y sin palabra clave, cuatro caminos más, todos sin desbloquear:
 | el lunes por la mañana | el lunes a las 09:00 |
 | en 10 minutos / dentro de media hora | desde ahora |
 | el lunes que viene | el lunes siguiente (dicho un jueves, el de dentro de 4 días) |
-| del 1 al 15 de agosto | empieza el 1 |
+| viaje con Bernie del 27 al 25 del mes siguiente | del 27 de este mes al 25 del siguiente |
+| del 1 al 15 de agosto / de lunes a viernes | un evento de varios días |
+| estoy de vacaciones hasta el domingo | desde hoy hasta el domingo |
+| viaje a Roma el lunes durante 3 días | de lunes a miércoles |
+| todo agosto / toda la semana que viene / todo el finde | el tramo entero |
+| a finales de mes / a principios de octubre / en agosto | el día que toca |
+| mañana a las 12 de la noche | la medianoche de mañana |
+| despiértame a las 7 | a las 07:00, no a las 19:00 |
 | cena de Nochebuena | el 24 de diciembre, con la fiesta en el título |
 | clase de yoga todos los martes a las 7 | todos los martes a las 19:00 |
+| gimnasio los martes y jueves a las 7 | los dos días, cada semana |
+| limpiar el coche cada dos semanas el sábado | un sábado sí y otro no |
+| alarma de lunes a viernes a las 7 | cada día laborable |
 | ...avísame dos días antes | cambia la antelación del aviso |
 | cancela la cena del viernes | la borra |
-| ya no voy al gimnasio mañana | lo borra |
+| ya no voy al gimnasio mañana / olvida lo del dentista | lo borra |
+| borra lo último que he apuntado | lo más nuevo (y si se repetía, entero) |
 | cancela todo lo de mañana | borra todo lo de ese día |
 | cancela la clase de yoga | borra la próxima; las demás siguen |
 | borra todas las clases de yoga | borra la serie entera |
 | pasa la cena del viernes al sábado | la mueve de día, a la misma hora |
 | retrasa la reunión una hora | la mueve una hora |
+| la reunión es ahora a las 6 | la cambia a las 18:00 |
+| alarga el viaje hasta el domingo / dos días | cambia dónde acaba |
 | ¿qué tengo mañana? | te lo dice |
 | ¿cuándo es el cumpleaños de Laura? | te lo dice |
 | ¿cuál es mi próximo evento? | te lo dice |
+| ¿estoy libre el viernes? / ¿qué tengo en octubre? | te lo dice |
 
 Las horas sin más («a las cinco») se entienden como la tarde entre la una y
 las siete, y como la mañana de las ocho en adelante, que es como se habla.
@@ -102,6 +135,24 @@ Con una cena, una fiesta o «esta noche» de por medio, «a las diez» son las
 Cuando dos eventos encajan por igual en lo que dices, pregunta cuál; es lo
 único que pregunta. Si nada encaja, lo dice y ofrece apuntar la frase, por si
 era eso.
+
+## Planes de WhatsApp
+
+Nébula no puede ver lo que contestas en WhatsApp, pero sí los mensajes que
+te llegan, por sus notificaciones, si le das permiso (*Ajustes → Planes de
+WhatsApp*, que lleva a «Acceso a notificaciones»). Cuando uno propone algo
+con día u hora («¿quedamos el sábado a las 9 para cenar?»), sale un aviso:
+«¿Lo apunto? Cenar con Marta · sáb 21:00», con **Apuntar** (lo guarda sin
+abrir nada) y **Cambiar** (lo abre en el editor, ya relleno). Nada sale del
+móvil y los mensajes no se guardan.
+
+Mejor callar ante la duda: los mensajes que no proponen nada, los que
+hablan de algo pasado («ayer quedamos…») y los que lo cancelan («no puedo
+el sábado») no dan aviso. Con 31 mensajes de prueba: los 15 planes
+detectados, ninguno de los 16 que no lo son.
+
+Además, cualquier mensaje se puede **compartir** con Nébula (mantener
+pulsado → Compartir): se abre el editor con el evento ya preparado.
 
 ## Estructura
 
@@ -115,6 +166,8 @@ app/src/main/java/com/calendarremember/
              Ejecutor.kt    Hace la orden y dice qué ha hecho
              Buscador.kt    De qué evento habla una orden
              Series.kt      Lo que se repite
+             Planes.kt      Los planes que llegan por WhatsApp
+             Xiaomi.kt      Los permisos propios de MIUI
              EscuchaServicio.kt  Escucha «Nébula»
              VozActivity.kt El círculo de dictado
              ModeloVoz.kt   El modelo de voz sin conexión
@@ -123,8 +176,10 @@ app/src/main/java/com/calendarremember/
              ReceptorAviso.kt  Lo que corre cuando salta una
              AlarmaActivity.kt La pantalla de la alarma
              Notificaciones.kt Canales y textos de los avisos
+             OyenteWhatsApp.kt Lee los mensajes que llegan
   widget/    WidgetProximos.kt El widget de la pantalla de inicio
   ui/        Pantallas y diálogos
+             FondoNebula.kt La nebulosa animada del fondo
 ```
 
 Los eventos viven en `eventos.json`, dentro de la app. **Ajustes → Exportar
@@ -143,15 +198,23 @@ repositorio: lo descarga la compilación. En una máquina con JDK 17:
 gradle :app:assembleRelease
 ```
 
-Las pruebas corren antes de cada compilación: unas 250 frases dictadas y lo
-que cada orden hace en la agenda. Si algo se rompe, el APK no llega a
-generarse.
+Las pruebas corren antes de cada compilación. Además de las de cada regla,
+`app/src/test/resources/frases.txt` guarda más de 300 frases con lo que
+tiene que salir de cada una, revisado a mano, y `planes.txt` los mensajes
+de WhatsApp: si un cambio altera cualquiera, la prueba lo dice con la frase.
+Si algo se rompe, el APK no llega a generarse.
+
+El icono lo genera `herramientas/icono.py` (necesita numpy y Pillow) con el
+mismo ruido que el fondo animado de la app.
 
 ## Lo que no hace, y por qué
 
-- **Escuchar con la pantalla apagada.** La palabra clave solo funciona con
-  la pantalla encendida, a propósito: oír toda la noche en el bolsillo gasta
-  batería y no aporta nada a «enciendo el móvil y le hablo».
+- **Escuchar con la pantalla apagada sin gastar.** Los asistentes de fábrica
+  usan un chip de audio que solo pueden usar las apps del sistema. Nébula
+  puede escuchar con la pantalla apagada, pero con el procesador: por eso va
+  en un ajuste aparte.
+- **Ver lo que contestas en WhatsApp.** WhatsApp no deja leer los chats;
+  solo se ven los mensajes que llegan, y por eso Apuntar es un toque.
 - **Widget en la pantalla de bloqueo.** No depende de la app: Android retiró
   los widgets de terceros del bloqueo y solo los ha devuelto a partir de la
   versión 14, en tablets. El widget ya se declara apto para esa ubicación.

@@ -1,0 +1,11 @@
+<!-- El destello del centro del icono, en un solo color: es lo que usa
+     Android 13 cuando se eligen iconos temáticos. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,28 C55.6,47 61,52.4 80,54 C61,55.6 55.6,61 54,80 C52.4,61 47,55.6 28,54 C47,52.4 52.4,47 54,28 Z" />
+</vector>

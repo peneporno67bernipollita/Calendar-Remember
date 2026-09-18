@@ -173,6 +173,12 @@ class EscuchaServicio : Service() {
     private var ultimaActivacion = 0L
     /** Con la pantalla apagada, el procesador no puede dormirse mientras escucha. */
     private var despierto: PowerManager.WakeLock? = null
+    /**
+     * Y tampoco mientras atiende lo que se dice tras la palabra: mirar el
+     * sensor, abrir el círculo o escuchar y contestar. Con tope, por si algo
+     * se queda a medias.
+     */
+    private var atendiendo: PowerManager.WakeLock? = null
 
     private var voz: TextToSpeech? = null
     private var vozLista = false
@@ -418,6 +424,7 @@ class EscuchaServicio : Service() {
      * contesta en voz alta. Nunca hace falta tocar nada para que escuche.
      */
     private fun alOirLaPalabra() {
+        mantenerDespiertoAtendiendo(true)
         pausado = true
         // Por si entre la detección y este momento algo (la pantalla que se
         // enciende de nuevo, por ejemplo) volvió a arrancar la escucha: el
@@ -458,8 +465,18 @@ class EscuchaServicio : Service() {
         principal.postDelayed({
             val abrio = VozActivity.abiertaEn >= disparo
             Preferencias.ponerAperturaBloqueada(this, !abrio)
-            if (!abrio) dictarAqui()
+            if (!abrio) dictarAqui() else mantenerDespiertoAtendiendo(false)
         }, ESPERA_PANTALLA_MS)
+    }
+
+    private fun mantenerDespiertoAtendiendo(si: Boolean) {
+        val candado = atendiendo ?: getSystemService(PowerManager::class.java)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "nebula:atender")
+            ?.also {
+                it.setReferenceCounted(false)
+                atendiendo = it
+            } ?: return
+        if (si) candado.acquire(30_000L) else if (candado.isHeld) candado.release()
     }
 
     /**
@@ -479,6 +496,8 @@ class EscuchaServicio : Service() {
             if (!abrio) {
                 Notificaciones.quitarDictado(this)
                 dictarAqui()
+            } else {
+                mantenerDespiertoAtendiendo(false)
             }
         }, ESPERA_BLOQUEO_MS)
     }
@@ -594,6 +613,7 @@ class EscuchaServicio : Service() {
     }
 
     private fun terminarDictado() {
+        mantenerDespiertoAtendiendo(false)
         dictando = false
         dictandoAhora = false
         pausado = false
@@ -634,6 +654,7 @@ class EscuchaServicio : Service() {
         principal.removeCallbacksAndMessages(null)
         soltar()
         mantenerDespierto(false)
+        mantenerDespiertoAtendiendo(false)
         runCatching { unregisterReceiver(receptorPantalla) }
         cargador.shutdown()
         runCatching { voz?.shutdown() }

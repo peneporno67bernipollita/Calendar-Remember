@@ -94,13 +94,25 @@ object Ejecutor {
             duracionMin = leido.duracionMin,
             dictado = leido.dictado,
             hasta = leido.hasta,
+            intervalo = leido.intervalo,
         )
 
         if (repite) {
-            val serie = Series.crear(evento, leido.repeticion, ahora.toLocalDate())
-            agenda.guardarVarios(serie)
+            // "Los martes y jueves": una cadena por día, todas de la misma
+            // serie. Cada una empieza el primero de su día desde la primera vez.
+            val dias = leido.diasSemana.ifEmpty { listOf(evento.inicio.dayOfWeek) }
+            val serie = java.util.UUID.randomUUID().toString()
+            val todas = dias.flatMap { d ->
+                val primera = evento.copy(
+                    inicio = evento.inicio.toLocalDate().with(java.time.temporal.TemporalAdjusters.nextOrSame(d))
+                        .atTime(evento.inicio.toLocalTime()),
+                )
+                val cadena = if (leido.repeticion == Repeticion.SEMANAL) primera else evento
+                Series.crear(cadena, leido.repeticion, ahora.toLocalDate(), serie)
+            }.distinctBy { it.inicio }
+            agenda.guardarVarios(todas)
             return Respuesta.Hecha(
-                "Apuntado: ${evento.titulo}, ${Series.describir(evento, leido.repeticion)}, " +
+                "Apuntado: ${evento.titulo}, ${Series.describir(evento, leido.repeticion, dias)}, " +
                     "empezando ${cuando(evento, ahora).substringBefore(" a las")}.",
                 true,
             )
@@ -133,6 +145,23 @@ object Ejecutor {
     // --- Cancelar ---------------------------------------------------------
 
     private fun cancelar(leido: Interpretacion, agenda: Agenda, ahora: LocalDateTime): Respuesta {
+        // "Borra lo último que he apuntado": lo más nuevo, y si era algo que
+        // se repite, entero, que es lo que se acaba de apuntar.
+        if (leido.elUltimo) {
+            val ultimo = agenda.eventos.maxByOrNull { it.creado }
+                ?: return Respuesta.Hecha("No hay nada apuntado.", false)
+            val serie = ultimo.serie
+            if (serie != null) {
+                val deLaSerie = agenda.eventos.filter { it.serie == serie }
+                val primera = deLaSerie.minBy { it.inicio }
+                val dias = Series.diasDe(primera, deLaSerie)
+                agenda.borrarVarios(deLaSerie.map { it.id })
+                return Respuesta.Hecha(
+                    "Borrado: ${primera.titulo}, ${Series.describir(primera, primera.repeticion, dias)}.", true,
+                )
+            }
+            return borrar(ultimo, agenda, ahora)
+        }
         if (sinPistas(leido)) return Respuesta.Hecha("Dime qué cancelo.", false)
 
         // "Cancela todo lo de mañana": todo lo de ese día, que es lo que dice.
@@ -158,10 +187,11 @@ object Ejecutor {
         val serie = encontrados.first().evento.serie
         if (todas && serie != null) {
             val deLaSerie = agenda.eventos.filter { it.serie == serie }
-            agenda.borrarVarios(deLaSerie.map { it.id })
             val primera = deLaSerie.minBy { it.inicio }
+            val dias = Series.diasDe(primera, deLaSerie)
+            agenda.borrarVarios(deLaSerie.map { it.id })
             return Respuesta.Hecha(
-                "Borrado: ${primera.titulo}, ${Series.describir(primera, primera.repeticion)}.", true,
+                "Borrado: ${primera.titulo}, ${Series.describir(primera, primera.repeticion, dias)}.", true,
             )
         }
 
@@ -181,6 +211,11 @@ object Ejecutor {
     // --- Cambiar ----------------------------------------------------------
 
     private fun cambiar(leido: Interpretacion, agenda: Agenda, ahora: LocalDateTime): Respuesta {
+        if (leido.elUltimo) {
+            val ultimo = agenda.eventos.maxByOrNull { it.creado }
+                ?: return Respuesta.Hecha("No hay nada apuntado.", false)
+            return mover(leido, ultimo, agenda, ahora)
+        }
         if (sinPistas(leido)) return Respuesta.Hecha("Dime qué evento cambio.", false)
         val encontrados = buscar(leido, agenda, ahora)
         if (encontrados.isEmpty()) return noEncontrada(leido, "cambiar")
@@ -269,14 +304,15 @@ object Ejecutor {
             }
 
             Consulta.CUANDO -> {
-                val encontrados = Buscador.candidatos(leido.titulo, null, agenda.eventos, ahora)
+                val encontrados = Buscador.candidatos(leido.titulo, leido.desde, agenda.eventos, ahora)
                 if (encontrados.isEmpty()) {
                     return Respuesta.Hecha("No encuentro nada parecido a «${leido.titulo}».", false)
                 }
                 // Algo que se repite: se contesta con la próxima vez.
                 elegirUno(encontrados, ahora)?.takeIf { it.serie != null }?.let { e ->
+                    val dias = Series.diasDe(e, agenda.eventos)
                     return Respuesta.Hecha(
-                        "${e.titulo} es ${Series.describir(e, e.repeticion)}. La próxima, ${cuando(e, ahora)}.", true,
+                        "${e.titulo} es ${Series.describir(e, e.repeticion, dias)}. La próxima, ${cuando(e, ahora)}.", true,
                     )
                 }
                 val mejor = encontrados.first().puntos

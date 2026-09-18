@@ -103,9 +103,6 @@ class VozActivity : ComponentActivity() {
             // que encenderla: si no, el círculo escucharía a oscuras.
             if (desdePalabra) setTurnScreenOn(true)
         }
-        // El aviso que la ha abierto sobre el bloqueo ya no hace falta.
-        Notificaciones.quitarDictado(this)
-
         // Un texto compartido desde otra app (un mensaje de WhatsApp): no hay
         // nada que escuchar, se abre para apuntarlo.
         if (intent.action == Intent.ACTION_SEND) {
@@ -122,6 +119,9 @@ class VozActivity : ComponentActivity() {
             return
         }
 
+        // El aviso que la ha abierto sobre el bloqueo ya no hace falta. (Va
+        // después de lo anterior: si atiende el servicio, ese aviso es suyo.)
+        Notificaciones.quitarDictado(this)
         Almacen.cargar(this)
 
         // Mientras se dicta, el micrófono es para el dictado.

@@ -68,6 +68,12 @@ data class Interpretacion(
     val nuevoHasta: LocalDate? = null,
     /** "alarga la reunión media hora", "acorta el viaje dos días": minutos de más o de menos. */
     val alargarMin: Long? = null,
+    /** "Cada dos semanas": cada cuántas veces se repite. */
+    val intervalo: Int = 1,
+    /** "Los martes y jueves": los días de la semana, si son varios. */
+    val diasSemana: List<DayOfWeek> = emptyList(),
+    /** "Borra lo último que he apuntado": el evento creado más recientemente. */
+    val elUltimo: Boolean = false,
 )
 
 object Interprete {
@@ -116,9 +122,21 @@ object Interprete {
     private val ARRANQUES = listOf(
         // Al dictar se tiende a llamar a la app por su nombre antes de pedir
         // nada: "Nébula, apúntame...". No es parte de lo que se apunta.
-        "nebula", "oye", "eh", "hola", "vale", "venga", "bueno", "por favor",
+        "ok nebula", "okey nebula", "ok", "okey", "okay", "nebula", "oye", "eh", "hola", "vale", "venga", "bueno",
+        "por favor", "a ver", "pues nada", "pues", "ahora", "tio", "tia", "bro", "colega", "macho", "chaval",
+        "acordarme de", "acordarme", "recordarme que", "recordarme", "que me acuerde de", "que me acuerde",
+        "me acuerde de",
         "que no se me olvide", "no se me olvide", "no me dejes olvidar", "no olvides",
         "acuerdate de", "acuerdate",
+        // Pedirlo con rodeos: "necesito que me recuerdes llamar al fontanero".
+        "necesito que me recuerdes que", "necesito que me recuerdes", "necesito que me avises de que",
+        "necesito que me avises", "quiero que me recuerdes que", "quiero que me recuerdes",
+        "quiero que me avises de que", "quiero que me avises", "me tienes que recordar que",
+        "me tienes que recordar", "me tienes que avisar de que", "me tienes que avisar",
+        "tienes que recordarme que", "tienes que recordarme", "me puedes recordar que", "me puedes recordar",
+        "puedes recordarme que", "puedes recordarme", "me podrias recordar que", "me podrias recordar",
+        "me recuerdas que", "me recuerdas", "me puedes apuntar", "me podrias apuntar", "puedes apuntar",
+        "me apuntas", "recuerdamelo", "avisame cuando", "sin falta",
         "pon en el calendario", "ponlo en el calendario", "apunta en el calendario",
         "anade al calendario", "anade en el calendario", "mete en el calendario",
         "recuerdame que tengo que", "recuerdame que", "recuerda que", "recuerda me", "recuerdame", "recuerda",
@@ -127,12 +145,18 @@ object Interprete {
         "anotame", "anota que", "anota", "agendame", "agenda", "pon me", "ponme", "pon",
         "creame", "crea", "programame", "programa", "meteme", "mete", "guardame", "guarda",
         "tengo que", "tengo", "hay que", "hay", "me toca", "toca",
+        // "Estoy de vacaciones hasta el domingo" se apunta como "Vacaciones".
+        "estoy de", "estamos de", "estare de", "estaremos de", "voy a estar de",
+        // "Crea un evento que se llame cena de empresa".
+        "un evento que se llame", "un recordatorio que se llame", "un evento llamado", "un recordatorio llamado",
+        "un evento para", "un recordatorio para", "un evento de", "un recordatorio de", "una alarma para",
+        "un evento", "un recordatorio", "que se llame",
         "nuevo evento", "nuevo recordatorio", "evento", "recordatorio",
         "en el calendario", "al calendario", "para el calendario",
     )
 
     /** Con qué se empieza a hablar antes de pedir nada. */
-    private const val MULETILLAS = """(?:nebula|nevula|oye|eh|hola|vale|venga|bueno|por\s+favor|""" +
+    private const val MULETILLAS = """(?:ok|okey|okay|nebula|nevula|oye|eh|hola|vale|venga|bueno|por\s+favor|a\s+ver|pues|tio|tia|""" +
         """quiero|quisiera|necesito|puedes|podrias|me\s+puedes|me\s+podrias|""" +
         """haz\s+el\s+favor\s+de|que|y)"""
 
@@ -149,6 +173,33 @@ object Interprete {
      */
     private val ESTADO = Regex("""\b(?:estoy|estamos|esta|estan|de\s+vacaciones|de\s+viaje|de\s+baja|de\s+permiso|""" +
         """de\s+puente|fuera|vacaciones|viaje)\b""")
+
+    /**
+     * Pistas de que "a las siete" es por la mañana: despertarse, madrugar,
+     * una alarma. Sin ellas, de la una a las siete se entiende la tarde.
+     */
+    private val DE_MANANA = Regex("""\b(?:despiert\w*|despertar\w*|levantarme|levantame|levantarnos|desayun\w*|""" +
+        """madrug\w*|alarma|despertador)\b""")
+
+    /**
+     * La primera palabra de un título tal como se dice al pedirlo, y cómo
+     * queda mejor apuntada: "avísame que saque la pizza" es "Sacar la pizza";
+     * "cenamos en casa de Pedro", "Cena en casa de Pedro".
+     */
+    private val MEJOR_DICHO = mapOf(
+        "cenamos" to "Cena", "comemos" to "Comida", "desayunamos" to "Desayuno", "merendamos" to "Merienda",
+        "despiertame" to "Despertar", "despertarme" to "Despertar", "levantarme" to "Despertar",
+        "levantame" to "Despertar",
+        "saque" to "Sacar", "llame" to "Llamar", "compre" to "Comprar", "vaya" to "Ir", "recoja" to "Recoger",
+        "pague" to "Pagar", "lleve" to "Llevar", "haga" to "Hacer", "ponga" to "Poner", "envie" to "Enviar",
+        "escriba" to "Escribir", "devuelva" to "Devolver", "apague" to "Apagar", "riegue" to "Regar",
+        "tome" to "Tomar", "mire" to "Mirar", "tienda" to "Tender", "tire" to "Tirar", "baje" to "Bajar",
+        "reserve" to "Reservar", "pida" to "Pedir", "prepare" to "Preparar", "limpie" to "Limpiar",
+        "revise" to "Revisar", "renueve" to "Renovar", "cambie" to "Cambiar", "felicite" to "Felicitar",
+        "conteste" to "Contestar", "entregue" to "Entregar", "estudie" to "Estudiar", "coja" to "Coger",
+        "traiga" to "Traer", "busque" to "Buscar", "lave" to "Lavar", "termine" to "Terminar",
+        "confirme" to "Confirmar", "descongele" to "Descongelar", "saquemos" to "Sacar",
+    )
 
     /** Lo que no es un título por sí solo, aunque sea lo único que quede. */
     private val SOLO_ENLACE = setOf(
@@ -411,8 +462,10 @@ object Interprete {
         Regex(inicio + """(?:cuando|que\s+dia|a\s+que\s+hora)\s+(?:es|son|era|sera|tengo|tenia|toca|me\s+toca|empieza)\b""")
             .find(texto)?.let { m ->
                 val resto = original.substring(m.range.last + 1)
-                val criterio = leer(resto, ahora, detectarBorrado = false).titulo
-                if (criterio.isNotBlank()) return consulta(Consulta.CUANDO, null, null, criterio)
+                val leido = leer(resto, ahora, detectarBorrado = false)
+                // "¿A qué hora tengo la reunión mañana?": el día ayuda a encontrarla.
+                val dia = if (leido.fechaDicha) leido.inicio.toLocalDate() else null
+                if (leido.titulo.isNotBlank()) return consulta(Consulta.CUANDO, dia, dia, leido.titulo)
             }
 
         // La agenda de un día o de unos días.
@@ -423,6 +476,9 @@ object Interprete {
             """(?:dime|dame|leeme|lee|cuentame|ensename|muestrame)\s+(?:que\s+tengo|lo\s+que\s+tengo|""" +
                 """mi\s+agenda|la\s+agenda|mis\s+(?:eventos|planes|citas)|el\s+calendario|que\s+hay)\b""",
             """agenda\s+(?:de|para|del)\b""",
+            """(?:estoy|estamos)\s+(?:libres?|ocupad[oa]s?|disponibles?)\b""",
+            """(?:tengo|tenemos)\s+(?:libre|hueco|tiempo|la\s+tarde\s+libre|la\s+manana\s+libre|el\s+dia\s+libre)\b""",
+            """cuant[oa]s\s+(?:cosas|citas|eventos|reuniones|planes|recordatorios)\s+(?:tengo|hay|tenemos)\b""",
         ).firstNotNullOfOrNull { Regex(inicio + it).find(texto) } ?: return null
 
         val resto = original.substring(agenda.range.last + 1)
@@ -454,6 +510,14 @@ object Interprete {
                 hoy to hoy.with(TemporalAdjusters.lastDayOfMonth())
             Regex("""\b(?:mes\s+que\s+viene|proximo\s+mes)\b""").containsMatchIn(restoN) -> {
                 val primero = hoy.plusMonths(1).withDayOfMonth(1)
+                primero to primero.with(TemporalAdjusters.lastDayOfMonth())
+            }
+            // "¿Qué tengo en octubre?": el mes entero (del de ahora, lo que queda).
+            Regex("""\b(?:en|de|durante|para)\s+(?:el\s+mes\s+de\s+)?($MES)\b""").find(restoN) != null &&
+                !Regex("""\d|\b(?:$N)\s+de\s+(?:$MES)""").containsMatchIn(restoN) -> {
+                val mes = MESES[Regex("""\b(?:en|de|durante|para)\s+(?:el\s+mes\s+de\s+)?($MES)\b""")
+                    .find(restoN)!!.groupValues[1]]!!
+                val primero = if (mes == hoy.monthValue) hoy else proximaFecha(hoy, mes, 1)
                 primero to primero.with(TemporalAdjusters.lastDayOfMonth())
             }
             else -> {
@@ -492,17 +556,28 @@ object Interprete {
             // también quiere decir "cámbiala".
             """\b(?:me\s+|nos\s+|se\s+|lo\s+|la\s+|le\s+)*(?:ha|han|has)\s+(?:cambiado|movido|pasado|""" +
                 """aplazado|retrasado|atrasado|adelantado|trasladado|pospuesto)\b""",
+            // "La reunión es ahora a las 6", "la cena al final es a las 10".
+            """\b(?:al\s+final\s+)?(?:es|sera)\s+(?:ahora|al\s+final|finalmente)\b""",
+            """\b(?:ahora|al\s+final|finalmente)\s+(?:es|sera)\b""",
+            // "El viaje dura hasta el 30": dónde acaba. Solo con "hasta": "acaba
+            // el plazo el 30" es algo que apuntar.
+            """\b(?:dura|durara)\b(?=\s+hasta\b)""",
         ).firstNotNullOfOrNull { Regex(it).find(texto) } ?: return null
 
         // Se quita el verbo tapándolo con espacios: así los índices del resto
         // siguen valiendo para el texto original.
-        val resto = original.substring(0, verbo.range.first) +
+        var resto = original.substring(0, verbo.range.first) +
             " ".repeat(verbo.range.last - verbo.range.first + 1) +
             original.substring(verbo.range.last + 1)
+        // "A la misma hora" no dice nada nuevo: la hora ya se conserva sola.
+        Regex("""\b(?:a\s+la\s+misma\s+hora(?:\s+de\s+siempre)?|manteniendo\s+la\s+hora|con\s+la\s+misma\s+hora)\b""")
+            .find(normalizar(resto))?.let { m ->
+                resto = resto.substring(0, m.range.first) + " ".repeat(m.value.length) + resto.substring(m.range.last + 1)
+            }
         val restoN = normalizar(resto)
         val raiz = texto.substring(verbo.range).trim().substringAfterLast(' ')
         // Alargar o acortar no mueve el principio: cambia dónde acaba.
-        val alarga = Regex("""^(?:alarg|ampli|extiend|exten|prolong|acort)""").containsMatchIn(raiz)
+        val alarga = Regex("""^(?:alarg|ampli|extiend|exten|prolong|acort|dura)""").containsMatchIn(raiz)
         val acorta = raiz.startsWith("acort")
 
         // ¿Un desplazamiento? "una hora", "media hora", "15 minutos", "una semana".
@@ -569,6 +644,18 @@ object Interprete {
                 nuevaHora = if (destino.horaDicha) destino.inicio.toLocalTime() else null,
             )
         }
+        // "Alarga el viaje el domingo": el final va detrás, sin "al" ni "hasta".
+        if (alarga) {
+            val tras = verbo.range.last + 1
+            val destino = leer(resto.substring(tras), ahora, detectarBorrado = false)
+            if (destino.fechaDicha && destino.titulo.isBlank()) {
+                val leido = leer(resto.substring(0, verbo.range.first), ahora, detectarBorrado = false)
+                return leido.copy(
+                    accion = Accion.MOVER, dictado = original, confianza = Confianza.ALTA,
+                    nuevoHasta = destino.inicio.toLocalDate(),
+                )
+            }
+        }
         return null
     }
 
@@ -611,8 +698,9 @@ object Interprete {
         // "me han cancelado la cena". Lo que no cuenta es el verbo metido en
         // una tarea —"recuérdame anular la tarjeta", "reunión para cancelar el
         // contrato"—: eso hay que apuntarlo.
-        val raices = """(?:cancel|borr|elimin|quit|anul)"""
-        val imperativo = """$raices(?:a|ame|alo|ala|amelo|amela|e|es)|suprim(?:e|elo|ela)|cancelar"""
+        val raices = """(?:cancel|borr|elimin|quit|anul|desapunt|desagend)"""
+        val imperativo = """$raices(?:a|ame|alo|ala|amelo|amela|e|es)|suprim(?:e|elo|ela)|cancelar|""" +
+            """olvida|olvidate|olvidalo|olvidala|olvidate\s+de"""
         // El infinitivo solo cuenta detrás de una muletilla ("quiero borrar").
         // Suelto al principio suele ser una tarea ("borrar las fotos el
         // sábado"), salvo "cancelar", que va en la regla anterior.
@@ -627,10 +715,20 @@ object Interprete {
             """\b(?:me\s+|nos\s+|se\s+|lo\s+|la\s+)*(?:ha|han|has)\s+(?:cancelado|anulado|suspendido)\b""",
             """\bse\s+(?:cancela|anula|suspende)\b""",
             """\b(?:queda|quedan|esta|estan)\s+(?:cancelad|anulad|suspendid)[oa]s?\b""",
+            """\bal\s+final\s+no\s+(?:hay|voy|vamos|va|van|quedamos|se\s+hace)\b""",
+            """\bno\s+(?:voy|vamos|puedo|podemos)\s+(?:a\s+)?ir\b""",
+            """^\s*(?:$MULETILLAS\s*[,.]?\s*)*no\s+hay\b""",
         )
         // Se pasan todas, no solo hasta la primera que acierte: así cada trozo
         // de la orden sale del texto y no se cuela en lo que hay que buscar.
         val aciertos = if (detectarBorrado) reglasBorrar.count { buscar(it) != null } else 0
+        // "El último que he puesto", "lo que acabo de apuntar": el más nuevo.
+        // Sin confundirlo con "el último día del mes".
+        val elUltimo = buscar("""\blo\s+ultimo\b(?!\s+(?:dia|de\s|del\s))|""" +
+            """\b(?:el|la)\s+ultim[oa](?:\s+(?:evento|recordatorio|cita|cosa))?\s+que\s+(?:he|has|hemos)\s+""" +
+            """(?:puesto|apuntado|creado|anadido|metido|guardado)\b|""" +
+            """\b(?:el|la)\s+ultim[oa]\s+(?:evento|recordatorio)\b|""" +
+            """\blo\s+que\s+(?:acabo|acabamos)\s+de\s+(?:apuntar|poner|crear|anadir|decir|meter|guardar)\b""") != null
         val accion = if (aciertos > 0) Accion.BORRAR else Accion.CREAR
 
         val hoy = ahora.toLocalDate()
@@ -640,30 +738,69 @@ object Interprete {
         var duracionMin: Int? = null
         var repeticion = Repeticion.NINGUNA
         var diaRepetido: DayOfWeek? = null
+        var intervalo = 1
+        val diasSemana = mutableListOf<DayOfWeek>()
+        // "De lunes a viernes": los días del tramo, si las dos puntas eran
+        // días de la semana. Con "todos los días" es una repetición.
+        var tramoDeSemana: List<DayOfWeek>? = null
+        var horaDelTramo: Pair<Int, Int>? = null
         var hoyDicho = false
         val deNoche = pistaNoche || DE_NOCHE.containsMatchIn(texto)
+        val deManana = DE_MANANA.containsMatchIn(texto)
+        // "El sábado a medianoche": la noche del sábado, que ya es domingo.
+        var medianoche = false
         // Lo que dura varios días: el último día, o cómo sacarlo del primero.
         var hasta: LocalDate? = null
         var hastaDicho: DiaDicho? = null
         var cuantoDura: ((LocalDate) -> LocalDate)? = null
 
-        // 1. Repetición: "todos los martes", "cada día", "todos los años".
-        buscar("""\b(?:todos\s+los|todas\s+las|cada)\s+(dias?|semanas?|mes(?:es)?|anos?|$DIA_SEMANA|""" +
-            """sabados|domingos|mananas|tardes|noches)\b""")?.let { m ->
-            val que = m.groupValues[1]
-            repeticion = when {
-                que.startsWith("dia") || que in setOf("mananas", "tardes", "noches") -> Repeticion.DIARIA
-                que.startsWith("mes") -> Repeticion.MENSUAL
-                que.startsWith("ano") -> Repeticion.ANUAL
-                else -> Repeticion.SEMANAL
+        // 1. Repetición: "todos los martes", "cada día", "todos los años",
+        //    "cada dos semanas", "los martes y jueves", "entre semana".
+        val diaOPlural = """(?:$DIA_SEMANA|sabados|domingos)"""
+        val listaDias = """$diaOPlural(?:(?:\s*,\s*|\s+y\s+|\s+e\s+|\s+)(?:los\s+|el\s+)?$diaOPlural)*"""
+        // "lunes" ya acaba en ese: se prueba tal cual y luego sin la ese del
+        // plural ("sábados", "domingos").
+        fun diasEn(trozo: String) = Regex(diaOPlural).findAll(trozo)
+            .mapNotNull { DIAS[it.value] ?: DIAS[it.value.removeSuffix("s")] }.distinct().toList()
+        val laborables = listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
+        when {
+            buscar("""\b(?:(?:todos\s+los|cada)\s+dias?\s+|los\s+dias\s+)?(?:laborables|de\s+diario)\b|""" +
+                """\b(?:todos\s+los\s+dias\s+)?entre\s+semana\b""") != null -> {
+                repeticion = Repeticion.SEMANAL
+                diasSemana += laborables
             }
-            // "lunes" ya acaba en ese: se prueba tal cual y luego sin la ese
-            // del plural ("sábados", "domingos").
-            diaRepetido = DIAS[que] ?: DIAS[que.removeSuffix("s")]
-            if (que == "tardes" && hora == null) hora = 17 to 0
-            if (que == "noches" && hora == null) hora = 21 to 0
-            if (que == "mananas" && hora == null) hora = 9 to 0
+            buscar("""\b(?:todos\s+los|cada|los)\s+(?:fines\s+de\s+semana|findes)\b""") != null -> {
+                repeticion = Repeticion.SEMANAL
+                diasSemana += listOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
+            }
+            else -> buscar("""\bcada\s+($N)\s+(dias|semanas|meses|anos)\b""")?.let { m ->
+                intervalo = (numero(m.groupValues[1]) ?: 1).coerceIn(1, 365)
+                repeticion = when {
+                    m.groupValues[2].startsWith("dia") -> Repeticion.DIARIA
+                    m.groupValues[2].startsWith("semana") -> Repeticion.SEMANAL
+                    m.groupValues[2].startsWith("mes") -> Repeticion.MENSUAL
+                    else -> Repeticion.ANUAL
+                }
+            } ?: buscar("""\b(?:todos\s+los|cada|los)\s+($listaDias)\b""")?.let { m ->
+                repeticion = Repeticion.SEMANAL
+                diasSemana += diasEn(m.groupValues[1])
+            } ?: buscar("""\b(?:todos\s+los|todas\s+las|cada)\s+(dias?|semanas?|mes(?:es)?|anos?|mananas?|tardes?|noches?)\b""")?.let { m ->
+                val que = m.groupValues[1]
+                repeticion = when {
+                    que.startsWith("dia") || que.startsWith("manana") || que.startsWith("tarde") ||
+                        que.startsWith("noche") -> Repeticion.DIARIA
+                    que.startsWith("semana") -> Repeticion.SEMANAL
+                    que.startsWith("mes") -> Repeticion.MENSUAL
+                    else -> Repeticion.ANUAL
+                }
+                // La hora de cada tramo, solo si luego no se dice otra:
+                // "cada mañana a las 8" es a las 8.
+                if (que.startsWith("tarde")) horaDelTramo = 17 to 0
+                if (que.startsWith("noche")) horaDelTramo = 21 to 0
+                if (que.startsWith("manana")) horaDelTramo = 9 to 0
+            }
         }
+        if (diasSemana.size == 1) diaRepetido = diasSemana.first()
 
         // 2. Avisos explícitos: "avísame dos días antes".
         //    Antes que el resto para que su "dos días" no lo capture otra regla.
@@ -717,6 +854,26 @@ object Interprete {
             if (conHora) hora = destino.hour to destino.minute
         }
 
+        // 4a. Lo que se dice sin reloj: "dentro de un rato", "en un momento",
+        //     "en un cuarto de hora", "luego".
+        if (fecha == null && hora == null) {
+            buscar("""\b(?:dentro\s+de|en)\s+(un\s+cuarto\s+de\s+hora|tres\s+cuartos\s+de\s+hora|""" +
+                """(?:un\s+)?(?:rato|ratito|momento|momentito|minuto|minutito|segundo))\b|^\s*(?:luego|mas\s+tarde)\b|""" +
+                """\b(?:luego|mas\s+tarde)\s*$""")?.let { m ->
+                val que = m.groupValues[1]
+                val minutos = when {
+                    que.startsWith("un cuarto") -> 15L
+                    que.startsWith("tres cuartos") -> 45L
+                    que.contains("rato") -> 30L
+                    que.contains("momento") || que.contains("minut") || que.contains("segundo") -> 10L
+                    else -> 120L
+                }
+                val destino = ahora.plusMinutes(minutos)
+                fecha = destino.toLocalDate()
+                hora = destino.hour to destino.minute
+            }
+        }
+
         // 4b. Cuántos días dura: "durante tres días", "dos semanas", "una
         //     semana entera". "En dos días" ya se lo ha llevado la regla de
         //     antes, y "dos días antes" no es una duración.
@@ -759,6 +916,10 @@ object Interprete {
                 fecha = primero
                 if (ultimo.isAfter(primero)) hasta = ultimo
                 hoyDicho = primero == hoy
+                if (d1.semana != null && d1.dia == null && d2.semana != null && d2.dia == null) {
+                    tramoDeSemana = generateSequence(primero) { it.plusDays(1) }
+                        .takeWhile { !it.isAfter(ultimo) }.map { it.dayOfWeek }.toList()
+                }
                 break
             }
         }
@@ -822,8 +983,8 @@ object Interprete {
                 val minutos = { mm: String, frac: String -> mm.toIntOrNull() ?: when (frac) { "media" -> 30; "cuarto" -> 15; else -> 0 } }
                 val h1 = numero(g[1]); val h2 = numero(g[4])
                 if (h1 != null && h2 != null && h1 <= 24 && h2 <= 24) {
-                    val a = ajustarHora(h1, g[7], "", deNoche)
-                    val b = ajustarHora(h2, g[7], "", deNoche)
+                    val a = ajustarHora(h1, g[7], "", deNoche, deManana)
+                    val b = ajustarHora(h2, g[7], "", deNoche, deManana)
                     val ini = a * 60 + minutos(g[2], g[3])
                     var fin = b * 60 + minutos(g[5], g[6])
                     if (fin <= ini) fin += 12 * 60
@@ -839,7 +1000,26 @@ object Interprete {
                 buscar("""\b(?:a\s+)?primera\s+hora(?:\s+de\s+la\s+manana)?\b""") != null -> hora = 8 to 0
                 buscar("""\b(?:a\s+)?ultima\s+hora(?:\s+de\s+la\s+tarde)?\b""") != null -> hora = 19 to 0
                 buscar("""\b(?:a|al)\s+(?:el\s+)?mediodia\b""") != null -> hora = 14 to 0
-                buscar("""\ba\s+medianoche\b""") != null -> hora = 0 to 0
+                buscar("""\b(?:a\s+)?(?:la\s+)?medianoche\b""") != null -> {
+                    hora = 0 to 0
+                    medianoche = true
+                }
+            }
+        }
+
+        // 8a. "A las ocho treinta", "a las diecisiete cuarenta y cinco": los
+        //     minutos dichos sin "y".
+        if (hora == null) {
+            buscar("""\ba\s+las?\s+($N)\s+(cinco|diez|quince|veinte|veinticinco|treinta\s+y\s+cinco|treinta|""" +
+                """cuarenta\s+y\s+cinco|cuarenta|cincuenta\s+y\s+cinco|cincuenta)\b(?!\s+(?:minutos|horas|dias))""")?.let { m ->
+                val h = numero(m.groupValues[1])
+                val min = when (val palabras = m.groupValues[2].replace(Regex("""\s+"""), " ")) {
+                    "treinta y cinco" -> 35
+                    "cuarenta y cinco" -> 45
+                    "cincuenta y cinco" -> 55
+                    else -> numero(palabras) ?: 0
+                }
+                if (h != null && h in 0..23) hora = ajustarHora(h, "", "", deNoche, deManana) to min
             }
         }
 
@@ -885,15 +1065,27 @@ object Interprete {
                     // "La una menos cuarto" deja la hora en cero: son las
                     // 12:45, no las 0:45.
                     val dicha = if (h == 0 && g[5].isNotEmpty()) 12 else h
-                    hora = ajustarHora(dicha, g[6], meridiano, deNoche) to min
+                    hora = ajustarHora(dicha, g[6], meridiano, deNoche, deManana) to min
+                    // "A las doce de la noche" del sábado es ya el domingo.
+                    if (dicha == 12 && min == 0 && hora?.first == 0) medianoche = true
                 }
             }
+        }
+
+        // 8b. "A las 5 o a las 6": vale la primera, y la otra no se queda en
+        //     el título.
+        if (hora != null) {
+            buscar("""\bo\s+(?:a\s+las?|sobre\s+las?)\s+(?:$N)(?:\s*[:.]\s*\d{2}|\s+y\s+(?:media|cuarto))?\b""")
         }
 
         // 9. El tramo del día sin hora: "el lunes por la mañana". Con
         //    "temprano", a primera hora.
         buscar("""\b(?:(?:por|de)\s+la\s+manana\s+)?(?:muy\s+)?temprano\b""")?.let {
             if (hora == null) hora = 8 to 0
+        }
+        if (hora == null) {
+            // De madrugada no dice la hora; mejor avisar de más que de menos.
+            buscar("""\b(?:de|por\s+la|en\s+la)\s+madrugada\b""")?.let { hora = 5 to 0 }
         }
         if (hora == null) {
             buscar("""\b(?:por|de|en)\s+la\s+(manana|tarde|noche)\b""")?.let { m ->
@@ -904,6 +1096,8 @@ object Interprete {
                 }
             }
         }
+
+        if (hora == null) hora = horaDelTramo
 
         // 10. Fechas con número. Un "el martes" pegado delante ("el martes 29",
         //     "el jueves 1 de octubre") se consume con la fecha: el número
@@ -925,6 +1119,14 @@ object Interprete {
             }
         }
         if (fecha == null) {
+            // "El 3 del 11": día y mes con números, como en las fechas escritas.
+            buscar("""\b(?:el\s+)?(?:dia\s+)?(\d{1,2})\s+del\s+(\d{1,2})\b(?!\s*(?:[:.]\d|de\s+la|y\s|h\b|horas))""")?.let { m ->
+                val d = m.groupValues[1].toInt()
+                val mes = m.groupValues[2].toInt()
+                if (d in 1..31 && mes in 1..12) fecha = proximaFecha(hoy, mes, d)
+            }
+        }
+        if (fecha == null) {
             buscar("""$antesDelDia(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b""")?.let { m ->
                 val d = m.groupValues[1].toInt()
                 val mes = m.groupValues[2].toInt()
@@ -938,11 +1140,17 @@ object Interprete {
         if (fecha == null) {
             // "el día 5", "el 22", "el martes 29", "el 5 del mes que viene".
             // Solo con cifras y sin nada detrás que lo haga una hora.
-            buscar("""\b(?:(?:el|del|este|para\s+el|antes\s+del|desde\s+el|a\s+partir\s+del)\s+)(?:(?:$DIA_SEMANA)\s+)?(?:dia\s+)?(\d{1,2})""" +
+            buscar("""\b(?:(?:el|del|al|este|para\s+el|antes\s+del|desde\s+el|a\s+partir\s+del)\s+)(?:(?:$DIA_SEMANA)\s+)?(?:dia\s+)?(\d{1,2})""" +
                 """(\s+del\s+(?:mes\s+que\s+viene|proximo\s+mes))?""" +
                 """(?!\s*(?:[:./-]\d|de\s+la|y\s|menos\s|h\b|horas|minutos|dias|semanas|meses))\b""")?.let { m ->
                 val d = m.groupValues[1].toInt()
-                if (d in 1..31) {
+                // "El 24, cena de Nochebuena": el día es el de la fiesta.
+                val fiesta = FIESTAS.firstOrNull { (nombre, md) ->
+                    md.second == d && Regex("""\b$nombre\b""").containsMatchIn(texto)
+                }
+                if (fiesta != null) {
+                    fecha = proximaFecha(hoy, fiesta.second.first, d)
+                } else if (d in 1..31) {
                     var base = hoy.withDayOfMonth(1)
                     if (m.groupValues[2].isNotEmpty() || d < hoy.dayOfMonth) base = base.plusMonths(1)
                     fecha = fechaSegura(base.year, base.monthValue, d)
@@ -993,8 +1201,38 @@ object Interprete {
             } ?: buscar("""\b(?:el\s+)?ultimo\s+dia\s+(?:del|de\s+este)\s+mes(\s+que\s+viene)?\b""")?.let { m ->
                 val mes = if (m.groupValues[1].isNotEmpty()) hoy.plusMonths(1) else hoy
                 fecha = mes.with(TemporalAdjusters.lastDayOfMonth())
-            } ?: buscar("""\b(?:a\s+|para\s+)?(?:final|fin)\s+de\s+mes\b""")?.let {
+            } ?: buscar("""\b(?:a\s+|para\s+|hacia\s+)?(?:finales|final|fin)\s+del?\s+(?:este\s+)?mes\b""")?.let {
                 fecha = hoy.with(TemporalAdjusters.lastDayOfMonth())
+            } ?: buscar("""\b(?:a\s+|para\s+|hacia\s+)?(?:principios|primeros)\s+del?\s+(?:mes(?:\s+que\s+viene)?|proximo\s+mes)\b""")?.let {
+                fecha = hoy.plusMonths(1).withDayOfMonth(1)
+            } ?: buscar("""\b(?:a\s+|para\s+|hacia\s+)?mediados\s+del?\s+(?:este\s+)?mes\b""")?.let {
+                fecha = if (hoy.dayOfMonth <= 15) hoy.withDayOfMonth(15) else hoy.plusMonths(1).withDayOfMonth(15)
+            } ?: buscar("""\b(?:a\s+|para\s+|hacia\s+)?(principios|primeros|mediados|finales|final|fin)\s+de\s+($MES)\b""")?.let { m ->
+                val mes = MESES[m.groupValues[2]]!!
+                val primero = proximaFecha(hoy, mes, 1).let { if (it.monthValue == hoy.monthValue && it.year == hoy.year + 1) hoy.withDayOfMonth(1) else it }
+                fecha = when (m.groupValues[1]) {
+                    "principios", "primeros" -> primero
+                    "mediados" -> primero.withDayOfMonth(15)
+                    else -> primero.with(TemporalAdjusters.lastDayOfMonth())
+                }.let { if (it.isBefore(hoy)) hoy else it }
+            } ?: buscar("""\b(?:la\s+)?(primera|segunda|tercera|cuarta|ultima)\s+semana\s+(?:de\s+($MES)|del\s+(?:mes\s+que\s+viene|proximo\s+mes))\b""")?.let { m ->
+                val base = m.groupValues[2].takeIf { it.isNotEmpty() }?.let { proximaFecha(hoy, MESES[it]!!, 1) }
+                    ?: hoy.plusMonths(1).withDayOfMonth(1)
+                fecha = when (m.groupValues[1]) {
+                    "primera" -> base
+                    "segunda" -> base.withDayOfMonth(8)
+                    "tercera" -> base.withDayOfMonth(15)
+                    "cuarta" -> base.withDayOfMonth(22)
+                    else -> base.with(TemporalAdjusters.lastDayOfMonth()).minusDays(6)
+                }
+            } ?: buscar("""\b(?:en|para|durante)\s+(?:el\s+mes\s+de\s+)?($MES)(?:\s+(del\s+(?:ano\s+que\s+viene|proximo\s+ano)))?\b""")?.let { m ->
+                // "En agosto": su día 1; en el mes en curso, hoy.
+                val mes = MESES[m.groupValues[1]]!!
+                fecha = when {
+                    m.groupValues[2].isNotEmpty() -> LocalDate.of(hoy.year + 1, mes, 1)
+                    mes == hoy.monthValue -> hoy
+                    else -> proximaFecha(hoy, mes, 1)
+                }
             } ?: buscar("""\besta\s+semana\b""")?.let {
                 // Sin día concreto: se apunta para hoy, y la confirmación lo
                 // dice, así que se ve si no era eso.
@@ -1021,9 +1259,24 @@ object Interprete {
 
         // 15. Fiestas: dan la fecha pero se quedan en el título.
         if (fecha == null) {
-            FIESTAS.firstOrNull { (nombre, _) -> Regex("""\b$nombre\b""").containsMatchIn(texto) }?.let { (_, md) ->
+            FIESTAS.firstOrNull { (nombre, _) -> Regex("""\b$nombre\b""").containsMatchIn(texto) }?.let { (nombre, md) ->
                 fecha = proximaFecha(hoy, md.first, md.second)
+                // Dicha como cuándo ("en Navidad", "el día de Reyes"), no es
+                // parte del título; dicha como qué ("cena de Nochebuena"), sí.
+                buscar("""\b(?:en|para|por|el\s+dia\s+de|el\s+dia|el)\s+$nombre\b""")
             }
+        }
+
+        // Un "hoy" o "mañana" que sobra porque otra regla ya dio ese mismo
+        // día ("hoy dentro de un rato"): fuera del título.
+        when (fecha) {
+            hoy -> buscar("""\bhoy\b""")
+            hoy.plusDays(1) -> buscar("""\bmanana\b""")
+        }
+        // Igual con el fin de semana: "el finde que viene nos vamos del
+        // viernes al domingo" ya tiene sus días.
+        if (fecha != null && fecha!!.dayOfWeek.value >= DayOfWeek.FRIDAY.value) {
+            buscar("""\b(?:el\s+|este\s+)?(?:finde|fin\s+de\s+semana)(?:\s+que\s+viene|\s+proximo)?\b""")
         }
 
         // --- Resolución --------------------------------------------------
@@ -1044,6 +1297,9 @@ object Interprete {
             }
         }
 
+        // La medianoche de un día dicho es el primer minuto del siguiente.
+        if (medianoche && fecha != null && hora?.first == 0) fecha = fecha!!.plusDays(1)
+
         val todoElDia = hora == null
         val fechaDicha = fecha != null
         val horaDicha = hora != null
@@ -1057,6 +1313,26 @@ object Interprete {
             }
         }
 
+        // "Todos los días de lunes a viernes": es cada día laborable, no un
+        // evento de cinco días. Igual si es para despertarse ("alarma de
+        // lunes a viernes a las 7"): eso se repite.
+        val tramoSemanal = tramoDeSemana
+        if (tramoSemanal != null && (repeticion == Repeticion.DIARIA || (repeticion == Repeticion.NINGUNA && deManana))) {
+            repeticion = Repeticion.SEMANAL
+            diasSemana.clear()
+            diasSemana += tramoSemanal.distinct()
+            fecha = null
+            hasta = null
+            if (diasSemana.size == 1) diaRepetido = diasSemana.first()
+        }
+        if (fecha == null && diasSemana.size > 1) {
+            // La primera vez: el más cercano de esos días (hoy, si aún llega).
+            fecha = diasSemana.map { d ->
+                val candidato = hoy.with(TemporalAdjusters.nextOrSame(d))
+                val pasado = candidato == hoy && (hora == null || !hoy.atTime(hora!!.first, hora!!.second).isAfter(ahora))
+                if (pasado) candidato.plusWeeks(1) else candidato
+            }.minOrNull()
+        }
         if (fecha == null && diaRepetido != null) {
             // "Todos los martes a las 7": el primero es el próximo martes (hoy
             // mismo si es martes y la hora aún no ha pasado).
@@ -1117,11 +1393,12 @@ object Interprete {
             // de "que el domingo es el cumpleaños de...".
             titulo = titulo
                 .replace(Regex("""^(?:de|del|el|la|lo|los|las|a|al|en|que|para|por|un|una|y|es|son)\s+""", RegexOption.IGNORE_CASE), "")
-                .replace(Regex("\\s+(?:de|del|el|la|los|las|a|al|en|que|para|por|con|y|antes)$", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\s+(?:de|del|el|la|los|las|a|al|en|que|para|por|con|y|antes|es|son|sera|será|era)$", RegexOption.IGNORE_CASE), "")
                 .trim(' ', ',', ';', '.', ':')
         } while (titulo != previo && titulo.isNotEmpty())
 
         if (normalizar(titulo) in SOLO_ENLACE) titulo = ""
+        titulo = retocar(titulo)
         titulo = titulo.replaceFirstChar { it.uppercase() }
 
         return Interpretacion(
@@ -1138,7 +1415,35 @@ object Interprete {
             repeticion = repeticion,
             avisosDichos = avisos != null,
             hasta = ultimoDia,
+            intervalo = intervalo,
+            diasSemana = if (diasSemana.size > 1) diasSemana.sorted() else emptyList(),
+            elUltimo = elUltimo,
         )
+    }
+
+    /**
+     * El título como se apuntaría a mano: "quedé con Luis" es "Quedada con
+     * Luis", "he quedado para cenar con Ana" es "Cenar con Ana", y el verbo
+     * de "avísame que saque la pizza", "Sacar la pizza".
+     */
+    private fun retocar(titulo: String): String {
+        var t = titulo
+        val n = normalizar(t)
+        Regex("""^(?:he\s+quedado|hemos\s+quedado|quede|quedamos)\s+(?:para|a)\s+""").find(n)?.let {
+            return retocar(t.substring(it.value.length))
+        }
+        Regex("""^(?:he\s+quedado|hemos\s+quedado|quede|quedamos)\s+con\b""").find(n)?.let {
+            return "Quedada con" + t.substring(it.value.length)
+        }
+        Regex("""^(?:me\s+voy|nos\s+vamos|voy|vamos)\s+a\s+""").find(n)?.let {
+            return "Ir a " + t.substring(it.value.length)
+        }
+        Regex("""^nos\s+vemos\b""").find(n)?.let {
+            return "Quedada" + t.substring(it.value.length)
+        }
+        val primera = n.substringBefore(' ')
+        MEJOR_DICHO[primera]?.let { t = it + t.substring(primera.length) }
+        return t
     }
 
     /**
@@ -1147,15 +1452,19 @@ object Interprete {
      * pone el habla, no el reloj. Con una cena o una fiesta de por medio, "a
      * las diez" son las diez de la noche.
      */
-    private fun ajustarHora(h: Int, tramo: String, meridiano: String, deNoche: Boolean): Int = when {
+    private fun ajustarHora(h: Int, tramo: String, meridiano: String, deNoche: Boolean, deManana: Boolean = false): Int = when {
         tramo == "noche" && h == 12 -> 0
         (tramo == "tarde" || tramo == "noche") && h < 12 -> h + 12
         tramo == "mediodia" && h in 1..4 -> h + 12
         tramo == "madrugada" && h == 12 -> 0
         meridiano == "pm" && h < 12 -> h + 12
         meridiano == "am" && h == 12 -> 0
+        // Despertarse o desayunar a las siete es por la mañana.
+        tramo.isEmpty() && meridiano.isEmpty() && deManana && h in 1..11 -> h
         tramo.isEmpty() && meridiano.isEmpty() && h in 1..7 -> h + 12
         tramo.isEmpty() && meridiano.isEmpty() && deNoche && h in 8..11 -> h + 12
+        // "Copas a las doce": la medianoche, no el mediodía.
+        tramo.isEmpty() && meridiano.isEmpty() && deNoche && h == 12 -> 0
         else -> h % 24
     }
 

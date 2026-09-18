@@ -39,6 +39,8 @@ data class Evento(
      * cuentan desde el primer día; el calendario lo pinta en todos.
      */
     val hasta: LocalDate? = null,
+    /** "Cada dos semanas": cada cuántas repeticiones toca. 1 es cada vez. */
+    val intervalo: Int = 1,
 ) {
     /** Dura más de un día. */
     val variosDias: Boolean
@@ -83,6 +85,7 @@ data class Evento(
         put("serie", serie ?: JSONObject.NULL)
         put("repeticion", repeticion.name)
         put("hasta", if (variosDias) hasta.toString() else JSONObject.NULL)
+        put("intervalo", intervalo)
     }
 
     companion object {
@@ -113,6 +116,7 @@ data class Evento(
                 }.getOrDefault(com.calendarremember.voz.Repeticion.NINGUNA),
                 hasta = o.optString("hasta").takeIf { it.isNotBlank() && it != "null" }
                     ?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                intervalo = o.optInt("intervalo", 1).coerceAtLeast(1),
             )
         }
     }
