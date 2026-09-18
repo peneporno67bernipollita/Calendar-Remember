@@ -14,6 +14,13 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        // El motor de la palabra clave trae librerias nativas para cada tipo
+        // de procesador. Los moviles de verdad son todos ARM: dejar fuera los
+        // x86 de los emuladores ahorra muchos megas en el APK.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     buildTypes {
@@ -51,6 +58,10 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // Vosk: reconocimiento de voz sin conexion para escuchar "Nebula".
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
 
     testImplementation("junit:junit:4.13.2")
 }

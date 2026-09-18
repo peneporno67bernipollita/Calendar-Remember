@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.calendarremember.datos.Almacen
+import com.calendarremember.datos.Preferencias
+import com.calendarremember.voz.EscuchaServicio
 import com.calendarremember.widget.WidgetProximos
 
 /**
@@ -62,6 +64,14 @@ class ReceptorAviso : BroadcastReceiver() {
                 Programador.reprogramarTodo(contexto, Almacen.eventos.value)
                 Notificaciones.refrescarAgenda(contexto)
                 WidgetProximos.refrescar(contexto)
+
+                // Tras reiniciar o actualizar, la escucha no puede volver sola
+                // al micrófono: Android exige que la arranque el usuario.
+                val arranque = intent.action == Intent.ACTION_BOOT_COMPLETED ||
+                    intent.action == Intent.ACTION_MY_PACKAGE_REPLACED
+                if (arranque && Preferencias.escuchaActiva(contexto) && !EscuchaServicio.enMarcha) {
+                    Notificaciones.mostrarReactivarEscucha(contexto)
+                }
             }
         }
     }

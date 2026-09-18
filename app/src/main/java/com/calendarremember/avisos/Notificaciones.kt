@@ -16,6 +16,7 @@ import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.ColorEvento
 import com.calendarremember.datos.Evento
 import com.calendarremember.datos.Preferencias
+import com.calendarremember.voz.EscuchaServicio
 import com.calendarremember.voz.VozActivity
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -40,6 +41,8 @@ object Notificaciones {
     const val CANAL_AGENDA = "agenda-bloqueo"
     private const val CANAL_AGENDA_VIEJO = "agenda"
     const val ID_AGENDA = 7001
+    private const val ID_LLAMADA_DICTADO = 7002
+    private const val ID_REACTIVAR = 7003
 
     const val ACCION_DESCARTAR = "com.calendarremember.DESCARTAR"
 
@@ -202,18 +205,34 @@ object Notificaciones {
     fun refrescarAgenda(contexto: Context) {
         val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
 
-        if (!Preferencias.agendaEnBloqueo(contexto)) {
+        // Mientras Nébula escucha, esta notificación es además la obligatoria
+        // del servicio: no se puede quitar aunque la agenda esté desactivada.
+        if (!Preferencias.agendaEnBloqueo(contexto) && !EscuchaServicio.enMarcha) {
             gestor.cancel(ID_AGENDA)
             return
         }
 
+        gestor.notify(ID_AGENDA, construirAgenda(contexto))
+
+        // Cuando empiece el próximo evento, esta lista ya estará desfasada:
+        // se deja programado el siguiente repintado.
+        Programador.programarRefresco(contexto, proximos().firstOrNull { !it.todoElDia })
+    }
+
+    /** Lo que aún no ha pasado, en orden: lo que enseña la agenda. */
+    private fun proximos(): List<Evento> {
         val ahora = LocalDateTime.now()
         val hoy = LocalDate.now()
-        val proximos = Almacen.eventos.value.filter {
+        return Almacen.eventos.value.filter {
             if (it.todoElDia) !it.inicio.toLocalDate().isBefore(hoy)
             else it.inicio.isAfter(ahora)
         }.take(4)
+    }
 
+    /** La notificación de la agenda, sin publicarla. La usa también el servicio. */
+    fun construirAgenda(contexto: Context): Notification {
+        val hoy = LocalDate.now()
+        val proximos = proximos()
         val paquete = contexto.packageName
 
         // --- Plegada: una línea -------------------------------------------
@@ -281,10 +300,13 @@ object Notificaciones {
         val resumen = primero?.let { "${etiquetaCuando(it, hoy)} · ${it.titulo}" }
             ?: "Nada a la vista"
 
-        val notificacion = NotificationCompat.Builder(contexto, CANAL_AGENDA)
+        return NotificationCompat.Builder(contexto, CANAL_AGENDA)
             .setSmallIcon(R.drawable.ic_aviso)
             .setContentTitle("Próximos")
             .setContentText(resumen)
+            // Se ve junto al nombre de la app: avisa de que el micrófono está
+            // atento, que es lo mínimo que hay que saber de algo que escucha.
+            .setSubText(if (EscuchaServicio.enMarcha) "Escuchando «Nébula»" else null)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(plegada)
             .setCustomBigContentView(desplegada)
@@ -297,11 +319,59 @@ object Notificaciones {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(abrirApp(contexto, null))
             .build()
-        gestor.notify(ID_AGENDA, notificacion)
+    }
 
-        // Cuando empiece el próximo evento, esta lista ya estará desfasada:
-        // se deja programado el siguiente repintado.
-        Programador.programarRefresco(contexto, proximos.firstOrNull { !it.todoElDia })
+    /**
+     * Se ha oído "Nébula", pero Android no deja abrir el dictado desde el
+     * servicio porque falta el permiso de mostrarse sobre otras apps. Se
+     * ofrece con una notificación que salta a la vista: un toque y dicta.
+     */
+    fun mostrarLlamadaDictado(contexto: Context) {
+        val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
+        val dictar = PendingIntent.getActivity(
+            contexto, "llamada-dictado".hashCode(),
+            Intent(contexto, VozActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(VozActivity.DESDE_PALABRA, true)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notificacion = NotificationCompat.Builder(contexto, CANAL_AVISOS)
+            .setSmallIcon(R.drawable.ic_mic)
+            .setContentTitle("Te escucho")
+            .setContentText("Toca para dictar")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setFullScreenIntent(dictar, true)
+            .setContentIntent(dictar)
+            .setAutoCancel(true)
+            .setTimeoutAfter(15_000)
+            .build()
+        gestor.notify(ID_LLAMADA_DICTADO, notificacion)
+    }
+
+    /**
+     * Tras reiniciar el móvil, Android no deja que el servicio vuelva a abrir
+     * el micrófono solo: tiene que arrancarlo el usuario. Un toque aquí basta.
+     */
+    fun mostrarReactivarEscucha(contexto: Context) {
+        val gestor = contexto.getSystemService(NotificationManager::class.java) ?: return
+        val reactivar = PendingIntent.getForegroundService(
+            contexto, "reactivar-escucha".hashCode(),
+            Intent(contexto, EscuchaServicio::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notificacion = NotificationCompat.Builder(contexto, CANAL_AVISOS)
+            .setSmallIcon(R.drawable.ic_mic)
+            .setContentTitle("Nébula no te escucha")
+            .setContentText("Desde que reiniciaste el móvil. Toca para activarla.")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(reactivar)
+            .setAutoCancel(true)
+            .build()
+        gestor.notify(ID_REACTIVAR, notificacion)
     }
 
     /** "Hoy 17:30", "Mañana", "Vie 20 09:00". */

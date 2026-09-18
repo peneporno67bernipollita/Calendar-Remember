@@ -13,6 +13,18 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Escuchar "Nébula". El micrófono solo se abre con la pantalla
+         encendida; el servicio en primer plano es lo que Android exige para
+         poder usarlo con la app cerrada. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Sin esto, Android no deja que el servicio abra el dictado al oír la
+         palabra: un servicio no puede abrir pantallas por su cuenta. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Para pedir que el ahorro de batería no mate la escucha. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- El dictado se lo pedimos al reconocedor del sistema. -->
     <queries>
         <intent>
@@ -51,6 +63,7 @@
             android:label="@string/atajo_dictar_largo"
             android:excludeFromRecents="true"
             android:taskAffinity=""
+            android:showWhenLocked="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.intent.action.VOICE_COMMAND" />
@@ -77,6 +90,12 @@
             android:launchMode="singleInstance"
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
+
+        <!-- Escucha "Nébula" con la pantalla encendida. -->
+        <service
+            android:name=".voz.EscuchaServicio"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Boton de dictado en la persiana de ajustes rapidos. -->
         <service

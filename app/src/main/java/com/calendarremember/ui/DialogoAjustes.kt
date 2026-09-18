@@ -23,6 +23,8 @@ import androidx.compose.ui.window.Dialog
 
 @Composable
 fun DialogoAjustes(
+    escuchaActiva: Boolean,
+    alEscucha: () -> Unit,
     agendaActiva: Boolean,
     alCambiarAgenda: () -> Unit,
     alCerrar: () -> Unit,
@@ -42,6 +44,15 @@ fun DialogoAjustes(
             ) {
                 Text("Ajustes", color = Neon.Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
 
+                Opcion(
+                    titulo = if (escuchaActiva) "Escuchar «Nébula»: activada"
+                        else "Escuchar «Nébula»: desactivada",
+                    detalle = if (escuchaActiva)
+                        "Di «Nébula» con la pantalla encendida y se abre el dictado."
+                    else
+                        "Toca para prepararla. Necesita unos permisos.",
+                    alPulsar = alEscucha,
+                )
                 Opcion(
                     titulo = if (agendaActiva) "Agenda en el bloqueo: activada"
                         else "Agenda en el bloqueo: desactivada",

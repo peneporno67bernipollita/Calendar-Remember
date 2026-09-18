@@ -2,10 +2,13 @@ package com.calendarremember
 
 import android.Manifest
 import android.app.AlarmManager
+import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -17,19 +20,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import com.calendarremember.avisos.Notificaciones
 import com.calendarremember.avisos.Programador
 import com.calendarremember.datos.Almacen
 import com.calendarremember.datos.Evento
 import com.calendarremember.datos.Preferencias
 import com.calendarremember.ui.DialogoAjustes
+import com.calendarremember.ui.DialogoEscucha
 import com.calendarremember.ui.DialogoEvento
 import com.calendarremember.ui.PantallaPrincipal
 import com.calendarremember.ui.TemaNebula
+import com.calendarremember.voz.EscuchaServicio
 import com.calendarremember.voz.VozActivity
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Sube cada vez que se vuelve a la app. Los permisos se conceden fuera,
+     * en los ajustes del sistema; al volver hay que mirarlos otra vez.
+     */
+    private var revision by mutableStateOf(0)
+
+    private val pedirMicro = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { revision++ }
 
     private val pedirNotificaciones = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -56,6 +72,13 @@ class MainActivity : ComponentActivity() {
         Programador.reprogramarTodo(this, Almacen.eventos.value)
         Notificaciones.refrescarAgenda(this)
 
+        // Abrir la app es el momento en que Android deja que el servicio tome
+        // el micrófono: si la escucha estaba activada y no corre (tras un
+        // reinicio, o porque el sistema la cerró), se levanta aquí.
+        if (Preferencias.escuchaActiva(this) && tieneMicro() && !EscuchaServicio.enMarcha) {
+            EscuchaServicio.arrancar(this)
+        }
+
         setContent {
             TemaNebula {
                 val eventos by Almacen.eventos.collectAsState()
@@ -67,6 +90,8 @@ class MainActivity : ComponentActivity() {
                 var dialogoAbierto by remember { mutableStateOf(false) }
                 var ajustesAbiertos by remember { mutableStateOf(false) }
                 var agendaActiva by remember { mutableStateOf(Preferencias.agendaEnBloqueo(this)) }
+                var escuchaActiva by remember { mutableStateOf(Preferencias.escuchaActiva(this)) }
+                var escuchaAbierta by remember { mutableStateOf(false) }
 
                 // Cuando se llega desde una notificación o desde un dictado
                 // dudoso, se abre directamente ese evento.
@@ -114,6 +139,11 @@ class MainActivity : ComponentActivity() {
 
                 if (ajustesAbiertos) {
                     DialogoAjustes(
+                        escuchaActiva = escuchaActiva,
+                        alEscucha = {
+                            ajustesAbiertos = false
+                            escuchaAbierta = true
+                        },
                         agendaActiva = agendaActiva,
                         alCambiarAgenda = {
                             agendaActiva = !agendaActiva
@@ -126,8 +156,87 @@ class MainActivity : ComponentActivity() {
                         alProbarAlarma = { probarAviso() },
                     )
                 }
+
+                if (escuchaAbierta) {
+                    // Leer "revision" hace que el diálogo se repinte al volver
+                    // de los ajustes del sistema con un permiso recién dado.
+                    @Suppress("UNUSED_VARIABLE") val r = revision
+                    DialogoEscucha(
+                        activa = escuchaActiva,
+                        micro = tieneMicro(),
+                        sobreApps = Settings.canDrawOverlays(this),
+                        bateria = bateriaSinRestricciones(),
+                        alPedirMicro = { pedirMicro.launch(Manifest.permission.RECORD_AUDIO) },
+                        alPedirSobreApps = {
+                            abrir(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName")))
+                        },
+                        alPedirBateria = {
+                            abrir(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:$packageName")))
+                        },
+                        alAbrirInicioXiaomi = { abrirInicioXiaomi() },
+                        alAbrirPermisosXiaomi = { abrirPermisosXiaomi() },
+                        alCambiar = { activar ->
+                            escuchaActiva = activar
+                            Preferencias.ponerEscucha(this, activar)
+                            if (activar) EscuchaServicio.arrancar(this)
+                            else EscuchaServicio.parar(this)
+                        },
+                        alCerrar = { escuchaAbierta = false },
+                    )
+                }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        revision++
+    }
+
+    private fun tieneMicro() = ContextCompat.checkSelfPermission(
+        this, Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
+
+    private fun bateriaSinRestricciones(): Boolean =
+        getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) == true
+
+    /** Abre un ajuste del sistema; si el móvil no lo tiene, la ficha de la app. */
+    private fun abrir(intent: Intent) {
+        runCatching { startActivity(intent) }.onFailure { abrirFichaApp() }
+    }
+
+    private fun abrirFichaApp() {
+        runCatching {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+            )
+        }
+    }
+
+    /** La lista de inicio automático de MIUI. En otros móviles no existe. */
+    private fun abrirInicioXiaomi() {
+        abrir(
+            Intent().setComponent(
+                ComponentName(
+                    "com.miui.securitycenter",
+                    "com.miui.permcenter.autostart.AutoStartManagementActivity",
+                )
+            )
+        )
+    }
+
+    /** Los permisos propios de MIUI: ventanas en segundo plano, bloqueo... */
+    private fun abrirPermisosXiaomi() {
+        abrir(
+            Intent("miui.intent.action.APP_PERM_EDITOR")
+                .setClassName(
+                    "com.miui.securitycenter",
+                    "com.miui.permcenter.permissions.PermissionsEditorActivity",
+                )
+                .putExtra("extra_pkgname", packageName)
+        )
     }
 
     private fun pedirPermisos() {

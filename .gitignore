@@ -4,3 +4,6 @@ local.properties
 *.apk
 *.keystore
 .idea/
+
+# El modelo de voz se baja al compilar; no va en el repositorio.
+app/src/main/assets/modelo-es/

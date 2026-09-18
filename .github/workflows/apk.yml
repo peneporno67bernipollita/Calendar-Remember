@@ -30,6 +30,25 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      # El modelo de voz en espanol (40 MB) no va en el repositorio: se baja
+      # al compilar y se guarda en cache para no descargarlo cada vez.
+      - uses: actions/cache@v4
+        id: cache-modelo
+        with:
+          path: app/src/main/assets/modelo-es
+          key: vosk-model-small-es-0.42
+
+      - name: Modelo de voz en espanol
+        if: steps.cache-modelo.outputs.cache-hit != 'true'
+        run: |
+          curl -sSL -o modelo.zip https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+          unzip -q modelo.zip
+          mkdir -p app/src/main/assets
+          rm -rf app/src/main/assets/modelo-es
+          mv vosk-model-small-es-0.42 app/src/main/assets/modelo-es
+          # La app compara esta marca para saber si su copia esta al dia.
+          echo "vosk-model-small-es-0.42" > app/src/main/assets/modelo-es/version
+
       # Las pruebas del interprete corren antes de compilar: si una regla de
       # interpretacion se rompe, el APK no llega a generarse.
       - name: Probar y compilar
